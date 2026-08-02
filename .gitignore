@@ -1,0 +1,20 @@
+# .NET
+[Bb]in/
+[Oo]bj/
+*.user
+*.suo
+.vs/
+.idea/
+Logs/
+
+# Node
+node_modules/
+dist/
+
+# Secrets
+.env
+*.env.local
+
+# OS
+.DS_Store
+Thumbs.db

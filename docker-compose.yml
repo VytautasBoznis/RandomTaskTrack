@@ -1,0 +1,59 @@
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_DB=${DB_NAME:-random_task_track}
+      - POSTGRES_USER=${DB_USER:-rtt}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:?DB_PASSWORD is required}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-rtt} -d ${DB_NAME:-random_task_track}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # One-shot schema migration. Runs to completion, then exits — the api service
+  # waits on it so it can never start against an un-migrated database.
+  migrate:
+    image: yuniql/cli:linux-x64-latest
+    volumes:
+      - ./migrations:/data
+    command: >
+      run --platform postgresql --auto-create-db
+      -c "Host=db;Port=5432;Database=${DB_NAME:-random_task_track};Username=${DB_USER:-rtt};Password=${DB_PASSWORD}"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: ./server
+    ports:
+      - "${API_PORT:-5080}:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - Database__ConnectionString=Host=db;Port=5432;Database=${DB_NAME:-random_task_track};Username=${DB_USER:-rtt};Password=${DB_PASSWORD};SSL Mode=Disable;Pooling=true;Minimum Pool Size=1;Maximum Pool Size=20
+      - Jwt__SecretKey=${JWT_SECRET_KEY:?JWT_SECRET_KEY is required}
+      - Jwt__Issuer=${JWT_ISSUER:-RandomTaskTrack}
+      - Jwt__Audience=${JWT_AUDIENCE:-RandomTaskTrackClients}
+      # 43200 minutes = 30 days. The tablet stays signed in.
+      - Jwt__ExpiryInMinutes=${JWT_EXPIRY_MINUTES:-43200}
+      - Ai__Provider=${AI_PROVIDER:-anthropic}
+      - Ai__Model=${AI_MODEL:-claude-opus-5}
+      - Ai__ApiKey=${AI_API_KEY:-}
+      - Ai__MaxTokens=${AI_MAX_TOKENS:-16000}
+      - Ai__ProviderOptions__effort=${AI_EFFORT:-high}
+      - Scheduler__TimeZone=${TIME_ZONE:-Europe/Vilnius}
+      - Cors__AllowedOrigins__0=${CORS_ORIGIN:-http://localhost:3000}
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+volumes:
+  db-data:
