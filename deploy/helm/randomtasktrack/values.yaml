@@ -1,0 +1,87 @@
+nameOverride: ""
+fullnameOverride: ""
+
+image:
+  # Leave empty to use bare repository names (local / Docker Hub).
+  registry: ghcr.io/vytautas
+  # Defaults to Chart.appVersion. Jenkins overrides this with the git SHA.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+api:
+  repository: randomtasktrack-api
+  # The recurrence sweep is idempotent (ON CONFLICT DO NOTHING on
+  # ux_task_tasks_recurrence_due), so >1 replica is safe. One is enough here.
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 192Mi
+    limits:
+      memory: 512Mi
+
+ui:
+  repository: randomtasktrack-ui
+  replicas: 1
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      memory: 128Mi
+
+migrations:
+  repository: randomtasktrack-migrations
+
+postgres:
+  # Set to false to point at a database you manage yourself; then `host` is
+  # required and nothing below it except port/database/username is used.
+  enabled: true
+  image: postgres:17-alpine
+  host: ""
+  port: 5432
+  database: random_task_track
+  username: rtt
+  storage: 5Gi
+  # Empty means the cluster's default StorageClass.
+  storageClass: ""
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
+
+# dbPassword and jwtSecretKey have no default on purpose — `helm install` fails
+# rather than deploying a known password, the same way compose fails on an
+# unset ${DB_PASSWORD}. Leave aiApiKey empty to run without chat.
+secrets:
+  dbPassword: ""
+  jwtSecretKey: ""
+  aiApiKey: ""
+
+jwt:
+  issuer: RandomTaskTrack
+  audience: RandomTaskTrackClients
+  # 43200 minutes = 30 days. The tablet stays signed in.
+  expiryInMinutes: 43200
+
+ai:
+  provider: anthropic
+  model: claude-opus-5
+  maxTokens: 16000
+  effort: high
+
+scheduler:
+  timeZone: Europe/Vilnius
+
+ingress:
+  enabled: true
+  className: nginx
+  host: tasks.example.com
+  annotations: {}
+  tls:
+    enabled: false
+    secretName: ""

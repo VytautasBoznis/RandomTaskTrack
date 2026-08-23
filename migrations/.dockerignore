@@ -1,0 +1,5 @@
+Dockerfile
+.dockerignore
+
+# Scratch space that runs on every migration — never ship it in an image.
+_draft/

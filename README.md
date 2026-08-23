@@ -22,6 +22,15 @@ never start against an un-migrated database. Health check on
 Leaving `AI_API_KEY` empty is supported: chat returns a clear error and
 everything else works.
 
+### UI
+
+```bash
+cd ui && npm install && npm run dev   # :3000, proxies /api to :5080
+```
+
+A stub: sign in, then one `/api/tasks/dashboard` call rendered into buckets.
+Creating and completing tasks is still API-only.
+
 ### First user
 
 `/api/auth/register` is admin-gated, so the first account is inserted by hand:
@@ -40,6 +49,9 @@ server/
   RandomTaskTrack.Business/    operations, repositories, Ai/, Services/
   RandomTaskTrack.Data/        models, DTOs, requests/responses, validators
   RandomTaskTrack.Interfaces/  IUnitOfWork, repository + AI interfaces
+ui/           React + TypeScript (Vite), served by nginx
+deploy/helm/  the chart — api, ui, Postgres, migrate Job, ingress
+Jenkinsfile   build → push → deploy
 ```
 
 ## API
@@ -72,6 +84,47 @@ partial unique index on `(recurrence_id, due_on)` makes the sweep idempotent.
 cadence; `from_completion` restarts the interval from the actual completion date
 — clean the bathroom on day 9 of a 7-day cycle and the next one is day 16, not
 day 14. Chosen per recurrence, because there is no right default.
+
+## Kubernetes
+
+`deploy/helm/randomtasktrack` deploys what compose does — API, UI, Postgres and
+a one-shot yuniql migration — behind a single ingress host.
+
+```bash
+helm upgrade --install randomtasktrack deploy/helm/randomtasktrack \
+  --namespace randomtasktrack --create-namespace \
+  --set secrets.dbPassword=... \
+  --set secrets.jwtSecretKey=... \
+  --set ingress.host=tasks.example.com
+```
+
+`dbPassword` and `jwtSecretKey` have no defaults — the render fails without
+them, the same way compose fails on an unset `${DB_PASSWORD}`. Set
+`postgres.enabled=false` and `postgres.host` to use a database you run yourself.
+
+Two things differ from compose, both forced by Kubernetes:
+
+**The migrations arrive as an image.** There is no host directory to bind-mount
+into `yuniql/cli`, so `migrations/Dockerfile` bakes the workspace in. Same CLI,
+same arguments.
+
+**Ordering is an init container, not a hook.** Compose gets "the API never
+starts against an un-migrated database" from `depends_on`. A Helm `pre-install`
+hook runs before Postgres exists and a `post-install` hook deadlocks `--wait`,
+so the migrate Job is a plain resource and the API blocks on an init container
+until `tracker.task_domains` answers.
+
+The ingress sends `/api` and `/health` to the API and everything else to the
+UI. They are same-origin there, so CORS never comes into play in a cluster.
+
+## CI
+
+`Jenkinsfile` is a multibranch pipeline. Every branch builds and type-checks the
+server, the UI and the chart; `main` additionally builds the three images
+tagged with the git SHA, pushes them, and runs `helm upgrade --install`.
+
+It expects five credentials on the controller: `rtt-registry`,
+`rtt-kubeconfig`, `rtt-db-password`, `rtt-jwt-secret-key`, `rtt-ai-api-key`.
 
 ## Swapping the AI provider
 

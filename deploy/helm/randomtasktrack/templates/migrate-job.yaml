@@ -1,0 +1,60 @@
+{{/*
+Not a Helm hook. Hooks run either strictly before the Postgres StatefulSet
+exists (pre-install) or after Helm has already waited on the API (post-install,
+which deadlocks with --wait, since the API blocks until this Job has run). As a
+plain resource it is created alongside everything else, and the API's init
+container is what enforces the ordering.
+
+The name carries the revision because a Job's pod template is immutable — a
+fixed name could never be upgraded. Helm prunes the previous revision's Job.
+*/}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ printf "%s-migrate-%v" (include "randomtasktrack.fullname" . | trunc 40 | trimSuffix "-") .Release.Revision }}
+  labels:
+    {{- include "randomtasktrack.labels" . | nindent 4 }}
+    app.kubernetes.io/component: migrate
+spec:
+  backoffLimit: 6
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        {{- include "randomtasktrack.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: migrate
+    spec:
+      restartPolicy: Never
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        - name: wait-for-postgres
+          image: {{ .Values.postgres.image }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - sh
+            - -c
+            - until pg_isready; do echo "waiting for postgres..."; sleep 3; done
+          env:
+            {{- include "randomtasktrack.pgEnv" . | nindent 12 }}
+      containers:
+        - name: yuniql
+          image: {{ include "randomtasktrack.image" (dict "ctx" $ "repository" .Values.migrations.repository) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - run
+            - --platform
+            - postgresql
+            - --auto-create-db
+            - -c
+            # $(DB_PASSWORD) is expanded by the kubelet, so the password stays
+            # out of the pod spec.
+            - Host={{ include "randomtasktrack.postgresHost" . }};Port={{ .Values.postgres.port }};Database={{ .Values.postgres.database }};Username={{ .Values.postgres.username }};Password=$(DB_PASSWORD)
+          env:
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "randomtasktrack.secretName" . }}
+                  key: db-password

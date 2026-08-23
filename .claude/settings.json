@@ -18,7 +18,32 @@
       "Bash(chmod +x /c/Dev/RandomTaskTrack/.claude/memory/link-memory.sh)",
       "Bash(docker --version)",
       "Read(//c/Program Files/PostgreSQL/**)",
-      "Bash(docker compose *)"
+      "Bash(docker compose *)",
+      "Bash(npm --version)",
+      "Bash(helm version *)",
+      "Bash(dotnet --version)",
+      "Bash(npm run *)",
+      "Bash(docker version *)",
+      "Bash(mkdir -p /c/tmp/helmdl)",
+      "Bash(curl -sfL https://api.github.com/repos/helm/helm/releases/latest -o rel.json)",
+      "Bash(curl -sfL \"https://api.github.com/repos/helm/helm/releases?per_page=60\" -o all.json)",
+      "Bash(curl -sfLO https://get.helm.sh/helm-v3.21.4-windows-amd64.zip)",
+      "Bash(unzip -o -q helm-v3.21.4-windows-amd64.zip)",
+      "Bash(./windows-amd64/helm.exe version *)",
+      "Bash(/c/tmp/helmdl/windows-amd64/helm.exe lint *)",
+      "Bash(./windows-amd64/helm.exe template *)",
+      "Bash(echo \"exit=$?\")",
+      "Bash(kubectl apply *)",
+      "Bash(curl -sfL https://api.github.com/repos/yannh/kubeconform/releases/latest -o kc.json)",
+      "Bash(curl -sfLO https://github.com/yannh/kubeconform/releases/download/v0.8.0/kubeconform-windows-amd64.zip)",
+      "Bash(unzip -o -q kubeconform-windows-amd64.zip)",
+      "Bash(./kubeconform.exe -summary -strict -kubernetes-version 1.31.0 rendered.yaml)",
+      "Bash(./kubeconform.exe -summary -strict -kubernetes-version 1.31.0 ext.yaml)",
+      "Bash(java -version)",
+      "Bash(export REGISTRY='ghcr.io/vytautas' IMAGE_TAG='abc123def456')",
+      "Bash(sh -c ' *)",
+      "Bash(sh -c 'set -eu; echo \"docker login target: ${REGISTRY%%/*}\"')",
+      "Bash(/c/tmp/helmdl/kubeconform.exe -summary -strict -kubernetes-version 1.31.0 out.yaml)"
     ]
   }
 }

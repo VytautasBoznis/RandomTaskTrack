@@ -1,0 +1,20 @@
+{{ .Chart.Name }} {{ .Chart.Version }} deployed as {{ .Release.Name }} in {{ .Release.Namespace }}.
+
+{{ if .Values.ingress.enabled -}}
+UI:  {{ ternary "https" "http" .Values.ingress.tls.enabled }}://{{ .Values.ingress.host }}/
+API: {{ ternary "https" "http" .Values.ingress.tls.enabled }}://{{ .Values.ingress.host }}/health
+{{- else -}}
+No ingress. Reach the UI with:
+
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "randomtasktrack.fullname" . }}-ui 3000:8080
+{{- end }}
+
+The API pods wait on an init container until the migrate Job has run. Watch it with:
+
+  kubectl -n {{ .Release.Namespace }} get jobs -l app.kubernetes.io/component=migrate
+
+/api/auth/register is admin-gated, so the first user is inserted by hand:
+
+  kubectl -n {{ .Release.Namespace }} exec -it {{ include "randomtasktrack.fullname" . }}-postgres-0 -- \
+    psql -U {{ .Values.postgres.username }} -d {{ .Values.postgres.database }} -c \
+    "INSERT INTO tracker.user_users (id, email, password, role) VALUES (gen_random_uuid(), 'you@example.com', '<bcrypt hash>', 999);"
