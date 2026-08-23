@@ -4,6 +4,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using RandomTaskTrack.API.ActionFilters;
 using RandomTaskTrack.API.Extensions;
+using RandomTaskTrack.Business.Base;
 using RandomTaskTrack.Data.Models.ConfigurationOptions;
 using RandomTaskTrack.Data.Models.Constants;
 using Serilog;
@@ -101,6 +102,11 @@ public class Program
 
         // Schema is snake_case, models are PascalCase.
         Dapper.DefaultTypeMap.MatchNamesWithUnderscores = true;
+
+        // Due dates and times are DateOnly/TimeOnly, which Dapper cannot bind on
+        // its own. Without these, every query that takes one throws.
+        Dapper.SqlMapper.AddTypeHandler(new DateOnlyTypeHandler());
+        Dapper.SqlMapper.AddTypeHandler(new TimeOnlyTypeHandler());
 
         // Keep JWT claim names exactly as issued so our constants match
         // throughout instead of being remapped to ClaimTypes.* URIs.

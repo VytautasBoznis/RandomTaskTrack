@@ -44,7 +44,12 @@
       "Bash(sh -c ' *)",
       "Bash(sh -c 'set -eu; echo \"docker login target: ${REGISTRY%%/*}\"')",
       "Bash(/c/tmp/helmdl/kubeconform.exe -summary -strict -kubernetes-version 1.31.0 out.yaml)",
-      "Bash(npm -v)"
+      "Bash(npm -v)",
+      "Bash(powershell -NoProfile -Command \"\\(Test-NetConnection -ComputerName localhost -Port 5432 -WarningAction SilentlyContinue\\).TcpTestSucceeded\")",
+      "Bash(dotnet run *)",
+      "Bash(sed -i 's|<Nullable>disable</Nullable>|<Nullable>disable</Nullable>\\\\n    <ImplicitUsings>enable</ImplicitUsings>|' Check.csproj)",
+      "Read(//c/Users/Vytautas/**)",
+      "Bash(rm -rf /c/tmp/dapper-dateonly-check)"
     ]
   }
 }
