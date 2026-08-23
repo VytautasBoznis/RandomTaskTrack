@@ -1,4 +1,4 @@
-import type { Dashboard, Session } from './types';
+import type { Dashboard, Session, TaskDomain, TaskDraft, TaskItemStatus, TaskListItem } from './types';
 
 // Always relative: in production the ingress routes /api to the API and / here,
 // so this is same-origin and CORS never comes into play. In dev the vite proxy
@@ -58,4 +58,30 @@ export const register = (email: string, password: string) =>
     body: JSON.stringify({ email, password }),
   });
 
-export const getDashboard = () => request<Dashboard>('/tasks/dashboard');
+export const getDashboard = async () =>
+  (await request<{ dashboard: Dashboard }>('/tasks/dashboard')).dashboard;
+
+export const getDomains = async () => (await request<{ domains: TaskDomain[] }>('/domains')).domains;
+
+export const createTask = (draft: TaskDraft) =>
+  request<{ task: TaskListItem }>('/tasks', {
+    method: 'POST',
+    body: JSON.stringify(draft),
+  });
+
+export const updateTask = (id: string, draft: TaskDraft) =>
+  request<{ task: TaskListItem }>(`/tasks/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(draft),
+  });
+
+// No actualData: without domain-specific UI there is nothing to adjust, and the
+// server logs the planned payload as the actual one in that case.
+export const completeTask = (id: string, status: TaskItemStatus) =>
+  request<{ task: TaskListItem }>(`/tasks/${id}/complete`, {
+    method: 'POST',
+    body: JSON.stringify({ status }),
+  });
+
+export const deleteTask = (id: string) =>
+  request<{ success: boolean }>(`/tasks/${id}`, { method: 'DELETE' });

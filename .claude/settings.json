@@ -43,7 +43,8 @@
       "Bash(export REGISTRY='ghcr.io/vytautas' IMAGE_TAG='abc123def456')",
       "Bash(sh -c ' *)",
       "Bash(sh -c 'set -eu; echo \"docker login target: ${REGISTRY%%/*}\"')",
-      "Bash(/c/tmp/helmdl/kubeconform.exe -summary -strict -kubernetes-version 1.31.0 out.yaml)"
+      "Bash(/c/tmp/helmdl/kubeconform.exe -summary -strict -kubernetes-version 1.31.0 out.yaml)",
+      "Bash(npm -v)"
     ]
   }
 }

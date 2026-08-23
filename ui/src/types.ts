@@ -4,6 +4,8 @@
 /** TaskItemStatus: 1 Pending, 2 Done, 3 Skipped. */
 export type TaskItemStatus = 1 | 2 | 3;
 
+export const TaskStatus = { Pending: 1, Done: 2, Skipped: 3 } as const;
+
 export interface Session {
   jwtToken: string;
   userId: string;
@@ -24,6 +26,23 @@ export interface TaskListItem {
   dueTime: string | null;
   status: TaskItemStatus;
   completedAt: string | null;
+}
+
+export interface TaskDomain {
+  id: number;
+  code: string;
+  name: string;
+  isActive: boolean;
+  sortOrder: number;
+}
+
+/** What the task form sends. `data` (the domain payload) is left to the server. */
+export interface TaskDraft {
+  domainId: number;
+  title: string;
+  notes: string | null;
+  dueOn: string;
+  dueTime: string | null;
 }
 
 export interface DomainStreak {

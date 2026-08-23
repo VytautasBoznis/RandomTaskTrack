@@ -49,9 +49,17 @@ h2 {
   margin: 0 0 12px;
 }
 
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
 .today {
   color: var(--muted);
-  margin: 0 0 24px;
+  margin: 0;
 }
 
 .card {
@@ -107,9 +115,26 @@ li:first-child {
   flex: 1;
 }
 
+.notes {
+  display: block;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .due {
   color: var(--muted);
   font-variant-numeric: tabular-nums;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Tap targets, but not the full-width size the sign-in form uses. */
+.actions button:not(.link) {
+  padding: 8px 16px;
 }
 
 .empty {
@@ -127,6 +152,22 @@ li:first-child {
   flex-direction: column;
   gap: 16px;
   max-width: 360px;
+}
+
+.task-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 520px;
+}
+
+.task-form .row {
+  display: flex;
+  gap: 16px;
+}
+
+.task-form .row label {
+  flex: 1;
 }
 
 .switch {
@@ -147,7 +188,9 @@ label {
   color: var(--muted);
 }
 
-input {
+input,
+select,
+textarea {
   background: var(--bg);
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -156,7 +199,13 @@ input {
   padding: 12px;
 }
 
-input:focus {
+textarea {
+  resize: vertical;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
   border-color: var(--accent);
   outline: none;
 }
@@ -182,4 +231,10 @@ button.link {
   color: var(--muted);
   font-weight: 400;
   padding: 0;
+}
+
+button.ghost {
+  background: none;
+  border: 1px solid var(--line);
+  color: var(--text);
 }
