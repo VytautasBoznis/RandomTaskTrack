@@ -3,7 +3,7 @@ fullnameOverride: ""
 
 image:
   # Leave empty to use bare repository names (local / Docker Hub).
-  registry: ghcr.io/vytautas
+  registry: ghcr.io/vytautasboznis
   # Defaults to Chart.appVersion. Jenkins overrides this with the git SHA.
   tag: ""
   pullPolicy: IfNotPresent
