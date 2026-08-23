@@ -1,5 +1,7 @@
 Dockerfile
 .dockerignore
 
-# Scratch space that runs on every migration — never ship it in an image.
-_draft/
+# Scratch space that runs on every migration - never ship the SQL in an image.
+# The directory itself must stay: yuniql validates the workspace layout and
+# fails outright if _draft is absent.
+_draft/*.sql
