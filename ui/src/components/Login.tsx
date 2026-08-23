@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { login } from '../api';
 
-export default function Login({ onSignedIn }: { onSignedIn: () => void }) {
+export default function Login({ onSignedIn, onRegister }: { onSignedIn: () => void; onRegister: () => void }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -39,6 +39,13 @@ export default function Login({ onSignedIn }: { onSignedIn: () => void }) {
       <button type="submit" disabled={busy}>
         {busy ? 'Signing in…' : 'Sign in'}
       </button>
+
+      <p className="switch">
+        No account?{' '}
+        <button type="button" className="link" onClick={onRegister}>
+          Register
+        </button>
+      </p>
     </form>
   );
 }

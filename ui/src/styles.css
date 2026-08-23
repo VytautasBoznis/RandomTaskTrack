@@ -129,6 +129,16 @@ li:first-child {
   max-width: 360px;
 }
 
+.switch {
+  color: var(--muted);
+  font-size: 14px;
+  margin: 0;
+}
+
+.switch .link {
+  color: var(--accent);
+}
+
 label {
   display: flex;
   flex-direction: column;

@@ -51,4 +51,11 @@ export async function login(email: string, password: string): Promise<Session> {
   return session;
 }
 
+// Role is left to the server default (User) — the form never offers it.
+export const register = (email: string, password: string) =>
+  request<{ userId: string }>('/auth/register', {
+    method: 'POST',
+    body: JSON.stringify({ email, password }),
+  });
+
 export const getDashboard = () => request<Dashboard>('/tasks/dashboard');

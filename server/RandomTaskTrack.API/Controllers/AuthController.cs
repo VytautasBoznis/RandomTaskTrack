@@ -29,7 +29,6 @@ public class AuthController : BaseController
     }
 
     [HttpPost("register")]
-    [TypeFilter(typeof(AuthorizationFilter), Arguments = new object[] { UserRole.Admin })]
     public async Task<IActionResult> Register(RegisterRequest request)
     {
         RegisterResponse response = await _operationFactory.Get<RegisterOperation>().Run(request);

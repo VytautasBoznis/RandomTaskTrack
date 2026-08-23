@@ -33,12 +33,10 @@ Creating and completing tasks is still API-only.
 
 ### First user
 
-`/api/auth/register` is admin-gated, so the first account is inserted by hand:
-
-```sql
-INSERT INTO tracker.user_users (id, email, password, role)
-VALUES (gen_random_uuid(), 'you@example.com', '<bcrypt hash, work factor 12>', 999);
-```
+Register from the link on the sign-in screen. `/api/auth/register` is open —
+this is a single-household app on a local network, not a public service. New
+accounts get role `User` (1); nothing is admin-gated, so that is enough for
+everything the app does.
 
 ## Layout
 
@@ -59,7 +57,7 @@ Jenkinsfile   build → push → deploy
 | Method | Route | |
 |---|---|---|
 | POST | `/api/auth/login` | |
-| POST | `/api/auth/register` | admin only |
+| POST | `/api/auth/register` | open — see "First user" |
 | POST | `/api/auth/change-password` | |
 | GET | `/api/domains` | the trackers |
 | GET | `/api/tasks/dashboard` | overdue / today / upcoming / done today / streaks — one call |
