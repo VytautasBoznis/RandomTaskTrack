@@ -63,3 +63,103 @@ export interface Dashboard {
   completedToday: TaskListItem[];
   streaks: DomainStreak[];
 }
+
+/** RecurrenceRuleType: 1 every N days, 2 days of week, 3 day of month. */
+export type RecurrenceRuleType = 1 | 2 | 3;
+
+export const RuleType = { IntervalDays: 1, DaysOfWeek: 2, DayOfMonth: 3 } as const;
+
+/** RecurrenceAnchorMode: 1 from schedule, 2 from completion. */
+export type RecurrenceAnchorMode = 1 | 2;
+
+export const AnchorMode = { FromSchedule: 1, FromCompletion: 2 } as const;
+
+export interface Recurrence {
+  id: string;
+  domainId: number;
+  domainCode: string;
+  title: string;
+  notes: string | null;
+  data: string;
+  ruleType: RecurrenceRuleType;
+  intervalDays: number | null;
+  daysOfWeek: number[] | null;
+  dayOfMonth: number | null;
+  anchorMode: RecurrenceAnchorMode;
+  timeOfDay: string | null;
+  startsOn: string;
+  endsOn: string | null;
+  isActive: boolean;
+  lastDueOn: string | null;
+}
+
+/** Update ignores `domainId` and `startsOn`; the form disables them when editing. */
+export interface RecurrenceDraft {
+  domainId: number;
+  title: string;
+  notes: string | null;
+  ruleType: RecurrenceRuleType;
+  intervalDays: number | null;
+  daysOfWeek: number[] | null;
+  dayOfMonth: number | null;
+  anchorMode: RecurrenceAnchorMode;
+  timeOfDay: string | null;
+  /** Null lets the server start it today, in the scheduler's timezone. */
+  startsOn: string | null;
+  endsOn: string | null;
+}
+
+export interface CompletionLogItem {
+  id: string;
+  taskId: string;
+  domainId: number;
+  domainCode: string;
+  title: string;
+  status: TaskItemStatus;
+  plannedData: string;
+  actualData: string;
+  note: string | null;
+  dueOn: string;
+  completedAt: string;
+}
+
+export interface ConversationListItem {
+  id: string;
+  title: string;
+  domainId: number | null;
+  messageCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Role is "user" or "assistant"; tool turns are filtered out server-side. */
+export interface ChatMessage {
+  id: string;
+  seq: number;
+  role: string;
+  content: string | null;
+  toolCalls: string | null;
+  createdAt: string;
+}
+
+export interface ConversationDetail {
+  id: string;
+  title: string;
+  domainId: number | null;
+  messages: ChatMessage[];
+}
+
+export interface AppliedToolCall {
+  name: string;
+  input: string;
+  result: string;
+  isError: boolean;
+}
+
+export interface ChatReply {
+  conversationId: string;
+  reply: string;
+  appliedToolCalls: AppliedToolCall[];
+  inputTokens: number;
+  outputTokens: number;
+}

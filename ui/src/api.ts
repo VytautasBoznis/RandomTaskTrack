@@ -1,4 +1,17 @@
-import type { Dashboard, Session, TaskDomain, TaskDraft, TaskItemStatus, TaskListItem } from './types';
+import type {
+  ChatReply,
+  CompletionLogItem,
+  ConversationDetail,
+  ConversationListItem,
+  Dashboard,
+  Recurrence,
+  RecurrenceDraft,
+  Session,
+  TaskDomain,
+  TaskDraft,
+  TaskItemStatus,
+  TaskListItem,
+} from './types';
 
 // Always relative: in production the ingress routes /api to the API and / here,
 // so this is same-origin and CORS never comes into play. In dev the vite proxy
@@ -85,3 +98,52 @@ export const completeTask = (id: string, status: TaskItemStatus) =>
 
 export const deleteTask = (id: string) =>
   request<{ success: boolean }>(`/tasks/${id}`, { method: 'DELETE' });
+
+export const getCompletionLog = async (domainId: number | null) => {
+  const query = domainId === null ? '' : `?domainId=${domainId}`;
+
+  return (await request<{ entries: CompletionLogItem[] }>(`/tasks/completions${query}`)).entries;
+};
+
+// Paused recurrences are fetched too — otherwise pausing one would hide it with
+// no way to bring it back.
+export const getRecurrences = async () =>
+  (await request<{ recurrences: Recurrence[] }>('/recurrences?includeInactive=true')).recurrences;
+
+export const createRecurrence = (draft: RecurrenceDraft) =>
+  request<{ recurrence: Recurrence; materializedTaskCount: number }>('/recurrences', {
+    method: 'POST',
+    body: JSON.stringify(draft),
+  });
+
+export const updateRecurrence = (id: string, draft: RecurrenceDraft) =>
+  request<{ recurrence: Recurrence }>(`/recurrences/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(draft),
+  });
+
+// Everything the update request leaves null keeps its current value, so this
+// pauses or resumes without touching the schedule.
+export const setRecurrenceActive = (id: string, isActive: boolean) =>
+  request<{ recurrence: Recurrence }>(`/recurrences/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify({ isActive }),
+  });
+
+export const deleteRecurrence = (id: string) =>
+  request<{ success: boolean; deletedTaskCount: number }>(`/recurrences/${id}`, { method: 'DELETE' });
+
+export const getConversations = async () =>
+  (await request<{ conversations: ConversationListItem[] }>('/chat/conversations')).conversations;
+
+export const getConversation = async (id: string) =>
+  (await request<{ conversation: ConversationDetail }>(`/chat/conversations/${id}`)).conversation;
+
+export const sendChatMessage = (conversationId: string | null, message: string, domainId: number | null) =>
+  request<ChatReply>('/chat/messages', {
+    method: 'POST',
+    body: JSON.stringify({ conversationId, message, domainId }),
+  });
+
+export const deleteConversation = (id: string) =>
+  request<{ success: boolean }>(`/chat/conversations/${id}`, { method: 'DELETE' });

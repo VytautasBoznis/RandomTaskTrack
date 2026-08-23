@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ApiError, completeTask, deleteTask, getDashboard, getDomains } from '../api';
+import { completeTask, deleteTask, getDashboard } from '../api';
+import { useApiError, useDomains } from '../hooks';
 import TaskForm from './TaskForm';
 import { TaskStatus } from '../types';
-import type { Dashboard as DashboardData, TaskDomain, TaskItemStatus, TaskListItem } from '../types';
+import type { Dashboard as DashboardData, TaskItemStatus, TaskListItem } from '../types';
 
 function Bucket({
   title,
@@ -70,24 +71,11 @@ function Bucket({
 }
 
 export default function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
+  const { error, setError, fail } = useApiError(onUnauthorized);
+  const domains = useDomains(fail);
   const [data, setData] = useState<DashboardData | null>(null);
-  const [domains, setDomains] = useState<TaskDomain[]>([]);
-  const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<TaskListItem | 'new' | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
-
-  const fail = useCallback(
-    (e: unknown) => {
-      // A 30-day token outlives most things, but not a rotated Jwt:SecretKey.
-      if (e instanceof ApiError && e.status === 401) {
-        onUnauthorized();
-        return;
-      }
-
-      setError(e instanceof Error ? e.message : 'Could not load the dashboard');
-    },
-    [onUnauthorized],
-  );
 
   // Every mutation re-reads the dashboard: completing can spawn the next
   // occurrence of a recurrence and always moves the streak counts, so
@@ -98,10 +86,6 @@ export default function Dashboard({ onUnauthorized }: { onUnauthorized: () => vo
   useEffect(() => {
     reload();
   }, [reload]);
-
-  useEffect(() => {
-    getDomains().then(setDomains).catch(fail);
-  }, [fail]);
 
   async function run(task: TaskListItem, action: () => Promise<unknown>) {
     setBusyId(task.id);

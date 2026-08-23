@@ -49,6 +49,27 @@ h2 {
   margin: 0 0 12px;
 }
 
+nav {
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 20px;
+}
+
+button.tab {
+  background: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  color: var(--muted);
+  font-weight: 400;
+  padding: 10px 16px;
+}
+
+button.tab.selected {
+  border-bottom-color: var(--accent);
+  color: var(--text);
+}
+
 .toolbar {
   display: flex;
   align-items: center;
@@ -237,4 +258,83 @@ button.ghost {
   background: none;
   border: 1px solid var(--line);
   color: var(--text);
+}
+
+.paused {
+  opacity: 0.6;
+}
+
+fieldset.weekdays {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+fieldset.weekdays legend {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+label.checkbox {
+  flex-direction: row;
+  align-items: center;
+  color: var(--text);
+}
+
+label.checkbox input {
+  width: 20px;
+  height: 20px;
+}
+
+.chat {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+.conversations li {
+  justify-content: space-between;
+}
+
+.conversations .selected .title {
+  color: var(--accent);
+}
+
+.thread {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.message p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.message.user {
+  color: var(--muted);
+}
+
+.applied {
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+}
+
+.composer {
+  display: flex;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.composer input {
+  flex: 1;
+}
+
+@media (max-width: 720px) {
+  .chat {
+    grid-template-columns: 1fr;
+  }
 }
