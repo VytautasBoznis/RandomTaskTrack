@@ -79,7 +79,7 @@ scheduler:
 
 ingress:
   enabled: true
-  className: nginx
+  className: traefik
   host: tasks.example.com
   annotations: {}
   tls:
