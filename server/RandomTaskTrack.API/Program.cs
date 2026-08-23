@@ -119,6 +119,7 @@ public class Program
             .AddValidators()
             .AddOperations()
             .AddAiServices()
+            .AddRecipeServices()
             .AddDomainServices();
 
         var app = builder.Build();

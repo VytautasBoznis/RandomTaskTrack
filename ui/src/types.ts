@@ -123,6 +123,35 @@ export interface CompletionLogItem {
   completedAt: string;
 }
 
+export interface RecipeFamily {
+  id: number;
+  code: string;
+  name: string;
+  isActive: boolean;
+  sortOrder: number;
+}
+
+export interface RecipeIngredient {
+  item: string;
+  amount: string | null;
+}
+
+export interface WeeklyDish {
+  pickId: string;
+  weekOf: string;
+  recipeId: string;
+  title: string;
+  familyName: string | null;
+  imageUrl: string | null;
+  sourceUrl: string | null;
+  readyMinutes: number | null;
+  servings: number | null;
+  ingredients: RecipeIngredient[];
+  steps: string[];
+  /** Set once the dish is on the board. */
+  taskId: string | null;
+}
+
 export interface ConversationListItem {
   id: string;
   title: string;

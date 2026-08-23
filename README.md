@@ -1,7 +1,7 @@
 # RandomTaskTrack
 
 Personal task tracker for a wall tablet. One task engine, several AI-driven
-trackers (fitness, house cleaning, plants, cooking) on top of it.
+trackers (house cleaning, plants, cooking) on top of it.
 
 Backend patterns are lifted from `CartFees-admin` v2: four-project split,
 `UnitOfWork` + Dapper, the operation/validator pattern, JWT + BCrypt auth,

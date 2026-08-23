@@ -4,6 +4,7 @@ import type {
   ConversationDetail,
   ConversationListItem,
   Dashboard,
+  RecipeFamily,
   Recurrence,
   RecurrenceDraft,
   Session,
@@ -11,6 +12,7 @@ import type {
   TaskDraft,
   TaskItemStatus,
   TaskListItem,
+  WeeklyDish,
 } from './types';
 
 // Always relative: in production the ingress routes /api to the API and / here,
@@ -132,6 +134,24 @@ export const setRecurrenceActive = (id: string, isActive: boolean) =>
 
 export const deleteRecurrence = (id: string) =>
   request<{ success: boolean; deletedTaskCount: number }>(`/recurrences/${id}`, { method: 'DELETE' });
+
+// The weekly dish is pulled on first read of the week, so this GET can write.
+export const getWeeklyDish = () =>
+  request<{ dish: WeeklyDish; families: RecipeFamily[] }>('/recipes/weekly');
+
+export const rerollDish = async (familyId: number | null) =>
+  (
+    await request<{ dish: WeeklyDish }>('/recipes/reroll', {
+      method: 'POST',
+      body: JSON.stringify({ familyId }),
+    })
+  ).dish;
+
+export const createDishTask = (pickId: string, dueOn: string | null) =>
+  request<{ task: TaskListItem }>('/recipes/task', {
+    method: 'POST',
+    body: JSON.stringify({ pickId, dueOn }),
+  });
 
 export const getConversations = async () =>
   (await request<{ conversations: ConversationListItem[] }>('/chat/conversations')).conversations;

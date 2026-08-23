@@ -93,6 +93,13 @@ spec:
               value: {{ .Values.ai.maxTokens | quote }}
             - name: Ai__ProviderOptions__effort
               value: {{ .Values.ai.effort | quote }}
+            - name: Recipes__Provider
+              value: {{ .Values.recipes.provider | quote }}
+            - name: Recipes__ApiKey
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "randomtasktrack.secretName" . }}
+                  key: recipe-api-key
             - name: Scheduler__TimeZone
               value: {{ .Values.scheduler.timeZone | quote }}
             {{- if .Values.ingress.enabled }}

@@ -14,6 +14,13 @@ public static class ExceptionCodes
     public const string DOMAIN_NOT_FOUND = "DOMAIN_NOT_FOUND";
     public const string CONVERSATION_NOT_FOUND = "CONVERSATION_NOT_FOUND";
 
+    public const string RECIPE_PICK_NOT_FOUND = "RECIPE_PICK_NOT_FOUND";
+    public const string RECIPE_FAMILY_NOT_FOUND = "RECIPE_FAMILY_NOT_FOUND";
+    public const string RECIPE_NO_FAMILIES = "RECIPE_NO_FAMILIES";
+    public const string RECIPE_NO_NEW_DISHES = "RECIPE_NO_NEW_DISHES";
+    public const string RECIPE_SOURCE_NOT_CONFIGURED = "RECIPE_SOURCE_NOT_CONFIGURED";
+    public const string RECIPE_SOURCE_FAILED = "RECIPE_SOURCE_FAILED";
+
     public const string AI_PROVIDER_NOT_CONFIGURED = "AI_PROVIDER_NOT_CONFIGURED";
     public const string AI_PROVIDER_FAILED = "AI_PROVIDER_FAILED";
     public const string AI_TOOL_LIMIT_EXCEEDED = "AI_TOOL_LIMIT_EXCEEDED";

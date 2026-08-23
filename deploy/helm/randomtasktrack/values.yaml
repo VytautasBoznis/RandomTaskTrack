@@ -56,11 +56,13 @@ postgres:
 
 # dbPassword and jwtSecretKey have no default on purpose — `helm install` fails
 # rather than deploying a known password, the same way compose fails on an
-# unset ${DB_PASSWORD}. Leave aiApiKey empty to run without chat.
+# unset ${DB_PASSWORD}. Leave aiApiKey empty to run without chat, and
+# recipeApiKey empty to run without the recipes tab.
 secrets:
   dbPassword: ""
   jwtSecretKey: ""
   aiApiKey: ""
+  recipeApiKey: ""
 
 jwt:
   issuer: RandomTaskTrack
@@ -73,6 +75,9 @@ ai:
   model: claude-opus-5
   maxTokens: 16000
   effort: high
+
+recipes:
+  provider: spoonacular
 
 scheduler:
   timeZone: Europe/Vilnius

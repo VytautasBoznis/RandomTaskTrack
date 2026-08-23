@@ -3,15 +3,17 @@ import Chat from './components/Chat';
 import CompletionLog from './components/CompletionLog';
 import Dashboard from './components/Dashboard';
 import Login from './components/Login';
+import Recipes from './components/Recipes';
 import Recurrences from './components/Recurrences';
 import Register from './components/Register';
 import { clearToken, getToken } from './api';
 
-type View = 'today' | 'recurrences' | 'log' | 'chat';
+type View = 'today' | 'recurrences' | 'recipes' | 'log' | 'chat';
 
 const VIEWS: { id: View; label: string }[] = [
   { id: 'today', label: 'Today' },
   { id: 'recurrences', label: 'Recurring' },
+  { id: 'recipes', label: 'Recipes' },
   { id: 'log', label: 'Log' },
   { id: 'chat', label: 'Chat' },
 ];
@@ -63,6 +65,7 @@ export default function App() {
               mount, which is also how a chat turn's writes reach the dashboard. */}
           {view === 'today' && <Dashboard onUnauthorized={signOut} />}
           {view === 'recurrences' && <Recurrences onUnauthorized={signOut} />}
+          {view === 'recipes' && <Recipes onUnauthorized={signOut} />}
           {view === 'log' && <CompletionLog onUnauthorized={signOut} />}
           {view === 'chat' && <Chat onUnauthorized={signOut} />}
         </>

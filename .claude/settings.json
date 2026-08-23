@@ -49,7 +49,17 @@
       "Bash(dotnet run *)",
       "Bash(sed -i 's|<Nullable>disable</Nullable>|<Nullable>disable</Nullable>\\\\n    <ImplicitUsings>enable</ImplicitUsings>|' Check.csproj)",
       "Read(//c/Users/Vytautas/**)",
-      "Bash(rm -rf /c/tmp/dapper-dateonly-check)"
+      "Bash(rm -rf /c/tmp/dapper-dateonly-check)",
+      "WebFetch(domain:www.themealdb.com)",
+      "Bash(curl -s --max-time 25 \"https://www.themealdb.com/api/json/v1/1/list.php?a=list\")",
+      "Bash(curl -s --max-time 25 \"https://www.themealdb.com/api/json/v1/1/random.php\")",
+      "Bash(curl -s --max-time 20 \"https://www.themealdb.com/api/json/v1/1/filter.php?a=Indian\")",
+      "Bash(curl -s --max-time 20 \"https://www.themealdb.com/api/json/v1/1/filter.php?a=French\")",
+      "Bash(curl -s --max-time 20 \"https://www.themealdb.com/api/json/v1/1/filter.php?a=Greek\")",
+      "Bash(curl -s --max-time 20 \"https://www.themealdb.com/api/json/v1/1/filter.php?a=British\")",
+      "Bash(curl -s --max-time 20 \"https://www.themealdb.com/api/json/v1/1/filter.php?a=American\")",
+      "WebFetch(domain:spoonacular.com)",
+      "Bash(rm -rf /c/tmp/spoon-check)"
     ]
   }
 }

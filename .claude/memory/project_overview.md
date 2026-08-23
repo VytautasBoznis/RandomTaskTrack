@@ -5,10 +5,14 @@ reachable over the public internet via the owner's own DNS/hardware.
 
 ## What it is
 
-One task engine plus per-domain AI "generators", **not** four separate apps.
-Domains (fitness, house cleaning, plants, cooking) are rows in
-`tracker.task_domains` — adding a new tracker is an INSERT plus a system-prompt
-tweak, never a schema change.
+One task engine plus per-domain AI "generators", **not** several separate apps.
+Domains (house cleaning, plants, cooking) are rows in `tracker.task_domains` —
+adding a new tracker is an INSERT plus a system-prompt tweak, never a schema
+change. Fitness was dropped in `v0.01`.
+
+The one scope that is *not* just a domain is **recipes**: it pulls a dish a week
+from Spoonacular, rotating cuisine families, and can put that dish on the board
+as an ordinary cooking task.
 
 The load-bearing idea: the **completion log** records what *actually* happened
 (`actual_data`) next to what was planned (`planned_data`). That difference is
@@ -26,7 +30,11 @@ is just checkboxes.
   add the next version instead.
 - **AI** — swappable behind `IAiProvider`. Anthropic adapter ships;
   `NullAiProvider` is registered when no API key is set so the app still boots.
-- **Frontend** — React + TypeScript. Not built yet.
+- **Recipes** — same shape behind `IRecipeSource`: Spoonacular adapter ships,
+  `NullRecipeSource` when `Recipes:ApiKey` is empty.
+- **Frontend** — React + TypeScript, no router: `App.tsx` switches five tabs
+  (Today / Recurring / Recipes / Log / Chat) and each remounts on switch so it
+  re-reads.
 
 ## Layout
 
@@ -50,6 +58,9 @@ docker-compose.yml     db → migrate (one-shot yuniql) → api
 | `task_tasks` | Dated instances, ad-hoc and materialized alike — one dashboard query. |
 | `task_completions` | Append-only. planned vs actual. Never updated in place. |
 | `chat_conversations` / `chat_messages` | Provider-neutral chat history. |
+| `recipe_families` | Cuisine families, in the source's own vocabulary. The weekly pick rotates to whichever has gone longest unused. |
+| `recipe_recipes` | Every dish ever pulled. Doubles as the "already cooked" list. |
+| `recipe_picks` | One dish per ISO week. Partial unique index on `(week_of) WHERE status = 1`. |
 
 Domain-specific payloads live in `jsonb` `data` columns (sets/reps/weight, water
 ml, recipe id) rather than in per-domain tables.
@@ -58,10 +69,13 @@ ml, recipe id) rather than in per-domain tables.
 
 `/api/auth` (login, register, change-password) · `/api/domains` ·
 `/api/tasks` (+ `/dashboard`, `/completions`, `/{id}/complete`) ·
-`/api/recurrences` · `/api/chat` (conversations, messages) · `/health`
+`/api/recurrences` · `/api/recipes` (weekly, reroll, task) ·
+`/api/chat` (conversations, messages) · `/health`
 
 ## Not built yet
 
-React frontend; any domain-specific UI (fitness charts, recipe view, spin-the-
-wheel meal picker); confirmation round-trip for the destructive AI tools
-(`RequiresConfirmation` is set on the definitions but the API always auto-executes).
+Domain-specific payload UI (sets/reps, water ml) — `data` jsonb is written by
+the AI and read by nothing in the frontend; confirmation round-trip for the
+destructive AI tools (`RequiresConfirmation` is set on the definitions but the
+API always auto-executes); clearing an optional field through a partial update
+(null means "leave alone", so due time and end dates can be set but not removed).

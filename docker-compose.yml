@@ -46,6 +46,8 @@ services:
       - Ai__ApiKey=${AI_API_KEY:-}
       - Ai__MaxTokens=${AI_MAX_TOKENS:-16000}
       - Ai__ProviderOptions__effort=${AI_EFFORT:-high}
+      - Recipes__Provider=${RECIPE_PROVIDER:-spoonacular}
+      - Recipes__ApiKey=${RECIPE_API_KEY:-}
       - Scheduler__TimeZone=${TIME_ZONE:-Europe/Vilnius}
       - Cors__AllowedOrigins__0=${CORS_ORIGIN:-http://localhost:3000}
     depends_on:
