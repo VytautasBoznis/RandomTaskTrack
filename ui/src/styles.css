@@ -163,6 +163,10 @@ li:first-child {
   margin: 0;
 }
 
+.more {
+  margin-top: 12px;
+}
+
 .error {
   color: var(--error);
   margin: 0;
@@ -479,12 +483,77 @@ label.checkbox input {
   align-items: start;
 }
 
-.conversations li {
+.conversations .head {
+  display: flex;
+  align-items: center;
   justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
 }
 
-.conversations .selected .title {
+.conversations .head h2 {
+  margin: 0;
+}
+
+.conversations .head button {
+  font-size: 14px;
+  padding: 6px 12px;
+}
+
+.conversations ul {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* Rows are cards, not the divider-separated lines the task lists use. */
+.conversations li {
+  border-radius: 8px;
+  border-top: none;
+  flex-wrap: nowrap;
+  gap: 0;
+  padding: 0;
+}
+
+.conversations li.selected {
+  background: var(--bg);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.conversations .pick {
+  align-items: flex-start;
+  background: none;
+  color: var(--text);
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  font-weight: 400;
+  gap: 2px;
+  min-width: 0;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.conversations li.selected .name {
   color: var(--accent);
+}
+
+.conversations .name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conversations .when {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* Always visible: this runs on a touch screen, so there is no hover to reveal it. */
+.conversations .remove {
+  align-self: stretch;
+  padding: 0 12px;
 }
 
 .thread {

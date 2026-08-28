@@ -49,25 +49,78 @@ public partial class SpoonacularRecipeSource : IRecipeSource
     }
 
     /// <summary>
-    /// complexSearch rather than random. addRecipeInformation and fillIngredients
-    /// make it return the same recipe shape random does, so one call is still
-    /// enough and every reader below is shared — the array is just named
-    /// "results" instead of "recipes". instructionsRequired drops the dishes that
-    /// would fail the no-method check anyway.
+    /// Two calls, deliberately. complexSearch is a search index rather than a
+    /// recipe store: it hands back dishes whose analyzedInstructions is an empty
+    /// array even with addRecipeInformation set — Spoonacular's own worked
+    /// example does exactly that — and this source drops anything with no
+    /// method, so a one-call search silently returned nothing at all.
+    ///
+    /// So complexSearch is used for ids only, and the dishes come from
+    /// informationBulk, which returns the same shape /recipes/random does and so
+    /// goes through the identical readers below.
+    ///
+    /// instructionsRequired is deliberately *not* set. It looks like the right
+    /// filter and is actively harmful: searching "chicken ramen" with it returns
+    /// nothing, without it returns recipe 637908, and that recipe has four
+    /// perfectly good analyzed steps. Casting the wide net and judging the real
+    /// payload is the only reliable order.
     /// </summary>
     public async Task<List<SourceRecipe>> SearchAsync(string query, int number, CancellationToken cancellationToken)
     {
-        string url = $"{_options.BaseUrl.TrimEnd('/')}/recipes/complexSearch" +
-                     $"?query={Uri.EscapeDataString(query)}" +
-                     $"&number={number}" +
-                     "&addRecipeInformation=true" +
-                     "&fillIngredients=true" +
-                     "&instructionsRequired=true";
+        string searchUrl = $"{_options.BaseUrl.TrimEnd('/')}/recipes/complexSearch" +
+                           $"?query={Uri.EscapeDataString(query)}" +
+                           $"&number={number}";
 
-        return await GetCandidatesAsync(url, "results", $"query {query}", cancellationToken);
+        List<string> ids = await GetIdsAsync(searchUrl, $"query {query}", cancellationToken);
+
+        if (ids.Count == 0)
+        {
+            _logger.LogInformation("Spoonacular matched nothing for {Query}", query);
+
+            return new List<SourceRecipe>();
+        }
+
+        string bulkUrl = $"{_options.BaseUrl.TrimEnd('/')}/recipes/informationBulk" +
+                         $"?ids={Uri.EscapeDataString(string.Join(',', ids))}";
+
+        // The bulk response is a bare array, so there is no property to look in.
+        List<SourceRecipe> candidates = await GetCandidatesAsync(bulkUrl, null, $"query {query}", cancellationToken);
+
+        // Worth a line each time: "matched 10, 10 usable" and "matched 10, 0
+        // usable" are very different problems, and the second one is what sent
+        // this search back to the drawing board once already.
+        _logger.LogInformation(
+            "Spoonacular matched {Matched} for {Query}; {Usable} had a method",
+            ids.Count, query, candidates.Count);
+
+        return candidates;
     }
 
-    private async Task<List<SourceRecipe>> GetCandidatesAsync(string url, string arrayName, string what, CancellationToken cancellationToken)
+    private async Task<List<string>> GetIdsAsync(string url, string what, CancellationToken cancellationToken)
+    {
+        using JsonDocument document = await GetJsonAsync(url, what, cancellationToken);
+
+        var ids = new List<string>();
+
+        if (!document.RootElement.TryGetProperty("results", out JsonElement results) || results.ValueKind != JsonValueKind.Array)
+        {
+            return ids;
+        }
+
+        foreach (JsonElement result in results.EnumerateArray())
+        {
+            string id = ReadId(result);
+
+            if (id.Length > 0)
+            {
+                ids.Add(id);
+            }
+        }
+
+        return ids;
+    }
+
+    private async Task<JsonDocument> GetJsonAsync(string url, string what, CancellationToken cancellationToken)
     {
         HttpClient client = _httpClientFactory.CreateClient(RecipeSourceNames.Spoonacular);
 
@@ -87,11 +140,26 @@ public partial class SpoonacularRecipeSource : IRecipeSource
         }
 
         await using Stream stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-        using JsonDocument document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+
+        return await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+    }
+
+    /// <param name="arrayName">The property holding the array, or null when the
+    /// response is itself one.</param>
+    private async Task<List<SourceRecipe>> GetCandidatesAsync(string url, string? arrayName, string what, CancellationToken cancellationToken)
+    {
+        using JsonDocument document = await GetJsonAsync(url, what, cancellationToken);
 
         var candidates = new List<SourceRecipe>();
 
-        if (!document.RootElement.TryGetProperty(arrayName, out JsonElement array) || array.ValueKind != JsonValueKind.Array)
+        JsonElement array = document.RootElement;
+
+        if (arrayName is not null && !document.RootElement.TryGetProperty(arrayName, out array))
+        {
+            return candidates;
+        }
+
+        if (array.ValueKind != JsonValueKind.Array)
         {
             return candidates;
         }

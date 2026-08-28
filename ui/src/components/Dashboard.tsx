@@ -5,6 +5,8 @@ import TaskForm from './TaskForm';
 import { TaskStatus } from '../types';
 import type { Dashboard as DashboardData, TaskItemStatus, TaskListItem } from '../types';
 
+const COLLAPSED_COUNT = 3;
+
 function Bucket({
   title,
   tasks,
@@ -20,6 +22,9 @@ function Bucket({
   onEdit: (task: TaskListItem) => void;
   onDelete: (task: TaskListItem) => void;
 }) {
+  const [expanded, setExpanded] = useState(false);
+  const shown = expanded ? tasks : tasks.slice(0, COLLAPSED_COUNT);
+
   return (
     <section className="card">
       <h2>
@@ -30,7 +35,7 @@ function Bucket({
         <p className="empty">Nothing here.</p>
       ) : (
         <ul>
-          {tasks.map((task) => (
+          {shown.map((task) => (
             <li key={task.id}>
               <span className="domain">{task.domainName}</span>
               <span className="title">
@@ -65,6 +70,12 @@ function Bucket({
             </li>
           ))}
         </ul>
+      )}
+
+      {tasks.length > COLLAPSED_COUNT && (
+        <button type="button" className="link more" onClick={() => setExpanded(!expanded)}>
+          {expanded ? 'Show less' : `Show ${tasks.length - COLLAPSED_COUNT} more`}
+        </button>
       )}
     </section>
   );

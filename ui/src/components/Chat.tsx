@@ -34,6 +34,13 @@ export default function Chat({ onUnauthorized }: { onUnauthorized: () => void })
     reloadList();
   }, [reloadList]);
 
+  function startNewChat() {
+    setActive(null);
+    setApplied([]);
+    setMessage('');
+    setError(null);
+  }
+
   async function open(id: string) {
     setApplied([]);
     setError(null);
@@ -87,19 +94,46 @@ export default function Chat({ onUnauthorized }: { onUnauthorized: () => void })
   return (
     <div className="chat">
       <section className="card conversations">
-        <h2>Chats</h2>
-
-        <button type="button" onClick={() => { setActive(null); setApplied([]); }}>
-          New chat
-        </button>
+        <div className="head">
+          <h2>Chats</h2>
+          <button type="button" disabled={busy} onClick={startNewChat}>
+            + New
+          </button>
+        </div>
 
         <ul>
+          {/* The draft has no row of its own server-side: nothing is stored until
+              the first message, which is also what names it. */}
+          {active === null && (
+            <li className="selected">
+              <span className="pick">
+                <span className="name">New chat</span>
+                <span className="when">Named after your first message</span>
+              </span>
+            </li>
+          )}
+
           {conversations.map((conversation) => (
             <li key={conversation.id} className={active?.id === conversation.id ? 'selected' : undefined}>
-              <button type="button" className="link title" onClick={() => open(conversation.id)}>
-                {conversation.title}
+              <button
+                type="button"
+                className="pick"
+                title={conversation.title}
+                disabled={busy}
+                onClick={() => open(conversation.id)}
+              >
+                <span className="name">{conversation.title}</span>
+                <span className="when">
+                  {conversation.messageCount} messages · {new Date(conversation.updatedAt).toLocaleDateString()}
+                </span>
               </button>
-              <button type="button" className="link" onClick={() => remove(conversation)}>
+              <button
+                type="button"
+                className="link remove"
+                title={`Delete "${conversation.title}"`}
+                disabled={busy}
+                onClick={() => remove(conversation)}
+              >
                 ✕
               </button>
             </li>

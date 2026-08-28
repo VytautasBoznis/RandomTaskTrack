@@ -225,9 +225,23 @@ public class TasksRepository : ITasksRepository
 
     public async Task<List<TaskListItemDto>> GetUpcomingAsync(DateOnly fromExclusive, DateOnly toInclusive, IUnitOfWork unitOfWork)
     {
+        // A daily recurrence would otherwise fill the whole window with copies of
+        // itself, so each recurrence contributes only its next pending instance:
+        // keep the row that has no earlier pending sibling inside the window.
+        // ux_task_tasks_recurrence_due makes due_on unique per recurrence, so that
+        // leaves exactly one. One-off tasks (recurrence_id null) are all kept.
         var rows = await unitOfWork.Connection.QueryAsync<TaskListItemDto>(
             $@"{SelectListItem}
-               WHERE t.status = @pending AND t.due_on > @fromExclusive AND t.due_on <= @toInclusive
+               WHERE t.status = @pending
+                 AND t.due_on > @fromExclusive
+                 AND t.due_on <= @toInclusive
+                 AND (t.recurrence_id IS NULL OR NOT EXISTS (
+                         SELECT 1
+                         FROM tracker.task_tasks e
+                         WHERE e.recurrence_id = t.recurrence_id
+                           AND e.status = @pending
+                           AND e.due_on > @fromExclusive
+                           AND e.due_on < t.due_on))
                ORDER BY t.due_on, t.due_time NULLS LAST, d.sort_order",
             new { fromExclusive, toInclusive, pending = (int)TaskItemStatus.Pending },
             unitOfWork.Transaction);

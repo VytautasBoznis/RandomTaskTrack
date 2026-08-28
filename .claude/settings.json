@@ -66,7 +66,18 @@
       "Bash(which psql *)",
       "Bash(ls \"/c/Program Files/PostgreSQL/17/bin/\" 2>/dev/null | head -20)",
       "Read(//c/Program Files/PostgreSQL/17/bin//**)",
-      "Bash(sc query *)"
+      "Bash(sc query *)",
+      "Bash(curl -s \"https://www.themealdb.com/api/json/v1/1/search.php?s=ramen\")",
+      "Bash(curl -s \"https://www.themealdb.com/api/json/v1/1/search.php?s=chicken\")",
+      "Bash(curl -s 'https://api.spoonacular.com/recipes/complexSearch?query=chicken%20ramen&number=3&addRecipeInformation=true&fillIngredients=true&instructionsRequired=true&apiKey=2f29d3b2ceaa4e549c3f3327c2c6f264')",
+      "Bash(curl -sS 'https://api.spoonacular.com/recipes/complexSearch?query=chicken%20ramen&number=3&addRecipeInformation=true&fillIngredients=true&instructionsRequired=true&apiKey=__TRACKED_VAR__' -o /c/tmp/spoon-old.json -w 'HTTP %{http_code}\\\\n')",
+      "Bash(curl -sS 'https://api.spoonacular.com/recipes/informationBulk?ids=637908&apiKey=2f29d3b2ceaa4e549c3f3327c2c6f264')",
+      "Bash(curl -sS https://datasets-server.huggingface.co/parquet?dataset=AkashPS11%2Frecipes_data_food.com)",
+      "Bash(curl -sS \"https://huggingface.co/api/datasets/AkashPS11/recipes_data_food.com\")",
+      "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('num_rows_total:', d.get\\('num_rows_total'\\)\\)\")",
+      "Bash(curl -sSIL https://huggingface.co/datasets/AkashPS11/recipes_data_food.com/resolve/main/recipes.csv)",
+      "Bash(mkdir -p /c/tmp/rtt-data)",
+      "Bash(curl -sSL \"https://huggingface.co/datasets/AkashPS11/recipes_data_food.com/resolve/main/recipes.csv\" -o recipes.csv -w \"downloaded %{size_download} bytes in %{time_total}s\\\\n\")"
     ]
   }
 }
