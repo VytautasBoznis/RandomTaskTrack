@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { saveRecipes, searchRecipes, setWeeklyDish } from '../api';
 import { useApiError } from '../hooks';
+import RecipeCatalog from './RecipeCatalog';
 import type { RecipeCandidate, RecipeHistoryItem } from '../types';
 
 /**
@@ -77,8 +78,17 @@ export default function RecipeSearch({ onUnauthorized }: { onUnauthorized: () =>
     }
   }
 
+  // An import that has just finished changes what a search would return, so
+  // clear the old results rather than leaving stale ones on screen.
+  const onCatalogLoaded = useCallback(() => {
+    setCandidates(null);
+    setSelected([]);
+  }, []);
+
   return (
     <>
+      <RecipeCatalog onLoaded={onCatalogLoaded} />
+
       <form className="toolbar" onSubmit={search}>
         <input
           type="search"

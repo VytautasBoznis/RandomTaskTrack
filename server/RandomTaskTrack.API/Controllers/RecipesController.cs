@@ -94,6 +94,24 @@ public class RecipesController : BaseController
         return Ok(await _operationFactory.Get<GetRecipeHistoryOperation>().Run(request));
     }
 
+    /// <summary>How much of the bulk catalog is loaded, and whether a run is going.</summary>
+    [HttpGet("catalog")]
+    public async Task<IActionResult> CatalogStatus()
+    {
+        var request = new GetCatalogStatusRequest { SessionUserData = GetSessionModelFromJwt() };
+
+        return Ok(await _operationFactory.Get<GetCatalogStatusOperation>().Run(request));
+    }
+
+    /// <summary>Starts the bulk load in the background. Re-running adds only new dishes.</summary>
+    [HttpPost("catalog/import")]
+    public async Task<IActionResult> CatalogImport()
+    {
+        var request = new StartCatalogImportRequest { SessionUserData = GetSessionModelFromJwt() };
+
+        return Ok(await _operationFactory.Get<StartCatalogImportOperation>().Run(request));
+    }
+
     [HttpPut("{recipeId:guid}")]
     public async Task<IActionResult> Update(Guid recipeId, UpdateRecipeRequest request)
     {

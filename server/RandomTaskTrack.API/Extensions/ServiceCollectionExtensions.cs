@@ -11,6 +11,7 @@ using RandomTaskTrack.Business.Operations.Notes;
 using RandomTaskTrack.Business.Operations.Recipes;
 using RandomTaskTrack.Business.Operations.Recurrences;
 using RandomTaskTrack.Business.Operations.Tasks;
+using RandomTaskTrack.Business.Recipes;
 using RandomTaskTrack.Business.Recipes.Sources;
 using RandomTaskTrack.Business.Repositories.Auth;
 using RandomTaskTrack.Business.Repositories.Chat;
@@ -104,31 +105,50 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddRecipeServices(this IServiceCollection services)
     {
         services.AddHttpClient(RecipeSourceNames.Spoonacular);
+        services.AddHttpClient(nameof(RecipeCatalogImporter));
 
+        services.AddSingleton<IRecipeCatalogImporter, RecipeCatalogImporter>();
+
+        // The rotation and search want different things, so the registered
+        // source is a pair: an API for "pick me a Thai dish" (cuisine labels,
+        // images, timings) and the local corpus for "I want ramen" (breadth).
+        // See HybridRecipeSource.
         services.AddSingleton<IRecipeSource>(sp =>
         {
             RecipeOptions options = sp.GetRequiredService<IOptions<RecipeOptions>>().Value;
             var logger = sp.GetRequiredService<ILogger<Program>>();
 
-            if (string.IsNullOrWhiteSpace(options.ApiKey))
-            {
-                logger.LogWarning("No recipe API key configured — the recipes tab is disabled. Set Recipes__ApiKey to enable it.");
-                return new NullRecipeSource();
-            }
+            IRecipeSource rotation = BuildRotationSource(sp, options, logger);
+            var catalog = new CatalogRecipeSource(sp.GetRequiredService<IUnitOfWorkFactory>());
 
-            return options.Provider?.ToLowerInvariant() switch
-            {
-                RecipeSourceNames.Spoonacular or null or "" => new SpoonacularRecipeSource(
-                    sp.GetRequiredService<IHttpClientFactory>(),
-                    sp.GetRequiredService<IOptions<RecipeOptions>>(),
-                    sp.GetRequiredService<ILogger<SpoonacularRecipeSource>>()),
-                RecipeSourceNames.Null => new NullRecipeSource(),
-                _ => throw new InvalidOperationException(
-                    $"Unknown recipe source '{options.Provider}'. Supported: {RecipeSourceNames.Spoonacular}, {RecipeSourceNames.Null}.")
-            };
+            return new HybridRecipeSource(rotation, catalog, sp.GetRequiredService<ILogger<HybridRecipeSource>>());
         });
 
         return services;
+    }
+
+    private static IRecipeSource BuildRotationSource(IServiceProvider sp, RecipeOptions options, ILogger logger)
+    {
+        // Still only a warning with no key: the catalog needs none, so search
+        // and the whole cookbook keep working and only the weekly pick reports
+        // why it cannot roll.
+        if (string.IsNullOrWhiteSpace(options.ApiKey))
+        {
+            logger.LogWarning("No recipe API key configured — the weekly rotation is disabled. Set Recipes__ApiKey to enable it.");
+
+            return new NullRecipeSource();
+        }
+
+        return options.Provider?.ToLowerInvariant() switch
+        {
+            RecipeSourceNames.Spoonacular or null or "" => new SpoonacularRecipeSource(
+                sp.GetRequiredService<IHttpClientFactory>(),
+                sp.GetRequiredService<IOptions<RecipeOptions>>(),
+                sp.GetRequiredService<ILogger<SpoonacularRecipeSource>>()),
+            RecipeSourceNames.Null => new NullRecipeSource(),
+            _ => throw new InvalidOperationException(
+                $"Unknown recipe source '{options.Provider}'. Supported: {RecipeSourceNames.Spoonacular}, {RecipeSourceNames.Null}.")
+        };
     }
 
     /// <summary>
@@ -202,6 +222,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IValidator<SetWeeklyDishRequest>, SetWeeklyDishRequestValidator>();
         services.AddSingleton<IValidator<UpdateRecipeRequest>, UpdateRecipeRequestValidator>();
         services.AddSingleton<IValidator<GetRecipeHistoryRequest>, GetRecipeHistoryRequestValidator>();
+        services.AddSingleton<IValidator<GetCatalogStatusRequest>, GetCatalogStatusRequestValidator>();
+        services.AddSingleton<IValidator<StartCatalogImportRequest>, StartCatalogImportRequestValidator>();
 
         // Notes
         services.AddSingleton<IValidator<GetNotesRequest>, GetNotesRequestValidator>();
@@ -254,6 +276,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<SetWeeklyDishOperation>();
         services.AddScoped<UpdateRecipeOperation>();
         services.AddScoped<GetRecipeHistoryOperation>();
+        services.AddScoped<GetCatalogStatusOperation>();
+        services.AddScoped<StartCatalogImportOperation>();
 
         // Notes
         services.AddScoped<GetNotesOperation>();

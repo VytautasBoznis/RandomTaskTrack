@@ -7,6 +7,13 @@ namespace RandomTaskTrack.Data.Models.Recipes;
 /// </summary>
 public class SourceRecipe
 {
+    /// <summary>
+    /// Which backend produced it. Set by the source itself rather than stamped
+    /// on by the caller, because with the rotation and search on different
+    /// backends the caller no longer knows.
+    /// </summary>
+    public string Source { get; set; } = "";
+
     public string ExternalId { get; set; } = "";
     public string Title { get; set; } = "";
     public string? ImageUrl { get; set; }

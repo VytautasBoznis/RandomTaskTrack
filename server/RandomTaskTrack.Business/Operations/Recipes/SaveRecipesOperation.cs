@@ -51,10 +51,20 @@ public class SaveRecipesOperation : BaseOperation<SaveRecipesRequest, SaveRecipe
         // Read back by external id rather than trusting the ids just generated:
         // a dish already in the library kept its original row, and the caller
         // needs the id that is actually there to be able to cook it.
-        List<RecipeHistoryItemDto> saved = await _recipesRepository.GetHistoryItemsBySourceAsync(
-            _source.Name,
-            recipes.Select(recipe => recipe.ExternalId).ToArray(),
-            unitOfWork);
+        //
+        // Grouped by source, because each dish carries its own: with the
+        // rotation and search on different backends a saved batch can be
+        // "catalog" while this operation's source is the hybrid wrapper, and
+        // looking up under the wrapper's name would find nothing at all.
+        var saved = new List<RecipeHistoryItemDto>();
+
+        foreach (IGrouping<string, Recipe> bySource in recipes.GroupBy(recipe => recipe.Source))
+        {
+            saved.AddRange(await _recipesRepository.GetHistoryItemsBySourceAsync(
+                bySource.Key,
+                bySource.Select(recipe => recipe.ExternalId).ToArray(),
+                unitOfWork));
+        }
 
         _logger.LogInformation("Saved {Count} searched dishes to the library", saved.Count);
 

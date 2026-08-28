@@ -651,6 +651,27 @@ nav.sub button.tab {
   padding: 2px 10px;
 }
 
+.catalog h2 {
+  color: var(--text);
+  font-size: 15px;
+  margin: 0;
+}
+
+.progress {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  height: 8px;
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+
+.progress-bar {
+  background: var(--accent);
+  height: 100%;
+  transition: width 0.4s ease;
+}
+
 @media (max-width: 720px) {
   .chat {
     grid-template-columns: 1fr;

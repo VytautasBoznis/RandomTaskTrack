@@ -77,7 +77,22 @@
       "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('num_rows_total:', d.get\\('num_rows_total'\\)\\)\")",
       "Bash(curl -sSIL https://huggingface.co/datasets/AkashPS11/recipes_data_food.com/resolve/main/recipes.csv)",
       "Bash(mkdir -p /c/tmp/rtt-data)",
-      "Bash(curl -sSL \"https://huggingface.co/datasets/AkashPS11/recipes_data_food.com/resolve/main/recipes.csv\" -o recipes.csv -w \"downloaded %{size_download} bytes in %{time_total}s\\\\n\")"
+      "Bash(curl -sSL \"https://huggingface.co/datasets/AkashPS11/recipes_data_food.com/resolve/main/recipes.csv\" -o recipes.csv -w \"downloaded %{size_download} bytes in %{time_total}s\\\\n\")",
+      "Bash(curl -sS \"https://huggingface.co/api/datasets/SandhyaKilari/RecipeNLG_dataset\")",
+      "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('license:', d.get\\('cardData',{}\\).get\\('license','NOT DECLARED'\\)\\); print\\('files:', [s['rfilename'] for s in d.get\\('siblings',[]\\)][:6]\\)\")",
+      "Bash(xargs -I{} echo \" matches for informationBulk/instructionsRequired: {}\")",
+      "Bash(export CATALOG_CONNECTION_STRING=\"Host=localhost;Port=55433;Database=rtt;Username=postgres;Password=rtt-test-pw\")",
+      "Bash(export CATALOG_MAX_ROWS=20000)",
+      "Bash(time dotnet run --project RandomTaskTrack.Importer/RandomTaskTrack.Importer.csproj -c Release)",
+      "Bash(xargs -I{} echo \"Importer refs in sln: {}\")",
+      "Bash(export Database__ConnectionString=\"Host=localhost;Port=55433;Database=rtt;Username=postgres;Password=rtt-test-pw;SSL Mode=Disable\")",
+      "Bash(export Jwt__SecretKey=\"test-secret-key-that-is-long-enough-for-hmac-sha256-signing-000\")",
+      "Bash(export Jwt__Issuer=RandomTaskTrack)",
+      "Bash(export Jwt__Audience=RandomTaskTrackClients)",
+      "Bash(export Jwt__ExpiryInMinutes=60)",
+      "Bash(pkill -f \"RandomTaskTrack.API\")",
+      "Bash(taskkill //F //IM RandomTaskTrack.API.exe)",
+      "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\)['dish']; print\\(f\\\\\"  weekly dish: {d['title']} | steps={len\\(d['steps']\\)} ingredients={len\\(d['ingredients']\\)} week={d['weekOf']}\\\\\"\\)\")"
     ]
   }
 }

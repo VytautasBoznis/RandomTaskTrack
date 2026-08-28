@@ -19,10 +19,13 @@ internal static class RecipeMapper
     /// A pulled dish as a library row. familyId is null for targeted search,
     /// where the cuisine is whatever the query happened to match.
     /// </summary>
-    public static Recipe ToRecipe(SourceRecipe pulled, string source, int? familyId) => new()
+    /// <param name="fallbackSource">Used only when the dish did not name its own
+    /// backend — with the rotation and search on different ones, the dish is the
+    /// authority, not the caller.</param>
+    public static Recipe ToRecipe(SourceRecipe pulled, string fallbackSource, int? familyId) => new()
     {
         Id = Guid.NewGuid(),
-        Source = source,
+        Source = string.IsNullOrWhiteSpace(pulled.Source) ? fallbackSource : pulled.Source,
         ExternalId = pulled.ExternalId,
         FamilyId = familyId,
         Title = pulled.Title,
@@ -68,6 +71,6 @@ internal static class RecipeMapper
               .Distinct()
               .ToArray();
 
-    private static List<T> Deserialize<T>(string json) =>
+    public static List<T> Deserialize<T>(string json) =>
         string.IsNullOrWhiteSpace(json) ? new List<T>() : JsonSerializer.Deserialize<List<T>>(json, Options) ?? new List<T>();
 }

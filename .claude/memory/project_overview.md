@@ -30,8 +30,11 @@ is just checkboxes.
   add the next version instead.
 - **AI** — swappable behind `IAiProvider`. Anthropic adapter ships;
   `NullAiProvider` is registered when no API key is set so the app still boots.
-- **Recipes** — same shape behind `IRecipeSource`: Spoonacular adapter ships,
-  `NullRecipeSource` when `Recipes:ApiKey` is empty.
+- **Recipes** — same shape behind `IRecipeSource`, but registered as
+  `HybridRecipeSource`: Spoonacular drives the weekly cuisine rotation (it has
+  the cuisine labels, images and timings), the local `recipe_catalog` drives
+  targeted search (Spoonacular's catalogue is thin outside Western cooking).
+  `NullRecipeSource` when `Recipes:ApiKey` is empty — search still works.
 - **Frontend** — React + TypeScript, no router: `App.tsx` switches six tabs
   (Today / Recurring / Recipes / Notes / Log / Chat) and each remounts on switch
   so it re-reads. Note bodies are markdown, rendered with `react-markdown` +
@@ -62,6 +65,7 @@ docker-compose.yml     db → migrate (one-shot yuniql) → api
 | `recipe_families` | Cuisine families, in the source's own vocabulary. The weekly pick rotates to whichever has gone longest unused. |
 | `recipe_recipes` | The library — every dish ever pulled or saved, plus rating, notes and tags. Mostly uncooked; it is a pool, not an exclusion list. The `not picked` tag takes one out of the rotation without hiding it. |
 | `recipe_picks` | One dish per ISO week, and the "already cooked" list. Partial unique index on `(week_of) WHERE status = 1`. |
+| `recipe_catalog` | Opt-in bulk corpus (RecipeNLG, 2.2M) that targeted search reads. Read-only reference — never picked directly, copied into `recipe_recipes` when saved. |
 | `note_notes` | Free-form markdown, attached to nothing — no domain, no schedule, no completion. |
 
 Domain-specific payloads live in `jsonb` `data` columns (sets/reps/weight, water

@@ -73,6 +73,8 @@ Jenkinsfile   build → push → deploy
 | POST | `/api/recipes/pick` | cook a named library dish this week |
 | GET | `/api/recipes/history` | the cookbook — filter by `search`, `tags`, `cooked` |
 | PUT | `/api/recipes/{id}` | rating, notes, tags |
+| GET | `/api/recipes/catalog` | bulk catalog status — loaded, running, progress |
+| POST | `/api/recipes/catalog/import` | starts the bulk load in the background |
 | GET/POST/PUT/DELETE | `/api/notes` | markdown notes, newest edit first |
 | POST | `/api/chat/messages` | one agent turn |
 | GET | `/api/chat/conversations`, `/api/chat/conversations/{id}` | |
@@ -107,6 +109,24 @@ tag (`RecipeTags.NotPicked`) takes one out of the rotation for good. It is a
 plain tag, not a column, which is the point: a skipped dish still shows in
 History, is still found by its other tags, and can still be cooked by naming it
 outright — it just never comes back on a reroll.
+
+**The rotation and search use different backends, on purpose.**
+`HybridRecipeSource` sends `PullAsync` to Spoonacular and `SearchAsync` to the
+local catalog, because they are good at different things. Spoonacular has
+cuisine labels, images, cook times and servings — everything the weekly rotation
+picks by and the dish card is built from. What it does not have is breadth:
+measured on the live API, `ramen` is 5 dishes, `sushi` 3, `pad thai` and
+`bibimbap` 0. No paid tier changes that; their plans sell quota, not recipes.
+The same searches against `tracker.recipe_catalog` return 1,061, 996, 490 and
+93. Search falls back to the API when the catalog is empty, so the tab works
+before anyone presses Load.
+
+The catalog is opt-in and loads from the Recipes tab — 2.2M recipes, ~2GB,
+streamed straight into Postgres by `RecipeCatalogImporter` with no key and no
+quota. It runs in the background and the tab polls. Re-running is incremental:
+rows land in a temp table and cross over with `ON CONFLICT DO NOTHING`, so a
+second run adds only what is new and a pod that dies mid-import leaves nothing
+half-written. `Recipes:CatalogMaxRows` caps it if 2GB is too much.
 
 ## Kubernetes
 

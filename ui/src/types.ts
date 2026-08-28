@@ -161,6 +161,21 @@ export interface WeeklyDish {
  */
 export const NOT_PICKED = 'not picked';
 
+/** The bulk local catalog that targeted search reads from. */
+export interface CatalogStatus {
+  /** Recipes currently in the catalog. Survives restarts — it's a row count. */
+  loaded: number;
+  /** Rows in the source file, for progress and for "what am I about to pull". */
+  sourceRows: number;
+  isRunning: boolean;
+  rowsRead: number;
+  /** New recipes the last run added. A re-run usually adds 0. */
+  rowsAdded: number;
+  /** Set once a run has finished in this server process. */
+  finishedAt: string | null;
+  error: string | null;
+}
+
 /** A search result, straight from the source and not saved yet. */
 export interface RecipeCandidate {
   externalId: string;

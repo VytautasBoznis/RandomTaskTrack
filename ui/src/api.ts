@@ -1,4 +1,5 @@
 import type {
+  CatalogStatus,
   ChatReply,
   CompletionLogItem,
   ConversationDetail,
@@ -157,6 +158,14 @@ export const createDishTask = (pickId: string, dueOn: string | null) =>
     method: 'POST',
     body: JSON.stringify({ pickId, dueOn }),
   });
+
+export const getCatalogStatus = async () =>
+  (await request<{ status: CatalogStatus }>('/recipes/catalog')).status;
+
+// Returns as soon as the run is queued; poll getCatalogStatus for progress.
+// Safe to call twice — `started: false` means one was already going.
+export const startCatalogImport = () =>
+  request<{ started: boolean; status: CatalogStatus }>('/recipes/catalog/import', { method: 'POST' });
 
 // Reads only — nothing is stored until saveRecipes sends the chosen ones back.
 export const searchRecipes = async (query: string) =>

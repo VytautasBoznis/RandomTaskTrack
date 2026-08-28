@@ -183,6 +183,7 @@ public partial class SpoonacularRecipeSource : IRecipeSource
 
             candidates.Add(new SourceRecipe
             {
+                Source = Name,
                 ExternalId = externalId,
                 Title = ReadString(candidate, "title") ?? "Untitled dish",
                 ImageUrl = ReadString(candidate, "image"),
