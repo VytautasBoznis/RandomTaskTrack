@@ -17,6 +17,11 @@ public class WeeklyDishDto
     public List<RecipeIngredient> Ingredients { get; set; } = new();
     public List<string> Steps { get; set; } = new();
 
+    /// <summary>The library's verdict on this dish, editable from the card.</summary>
+    public int? Rating { get; set; }
+    public string Notes { get; set; } = "";
+    public string[] Tags { get; set; } = Array.Empty<string>();
+
     /// <summary>Set once the dish has been put on the board, so the tab can say
     /// so instead of offering to add it twice.</summary>
     public Guid? TaskId { get; set; }

@@ -1,4 +1,6 @@
 using Dapper;
+using RandomTaskTrack.Data.Dtos.Recipes;
+using RandomTaskTrack.Data.Models.Constants;
 using RandomTaskTrack.Data.Models.Enums;
 using RandomTaskTrack.Data.Models.Recipes;
 using RandomTaskTrack.Interfaces.Base;
@@ -11,9 +13,42 @@ public class RecipesRepository : IRecipesRepository
     private const string SelectFamily = "id, code, name, is_active, sort_order";
 
     private const string SelectRecipe = @"
-        id, source, external_id, family_id, title, image_url, source_url,
-        ready_minutes, servings, ingredients::text AS ingredients,
-        steps::text AS steps, pulled_at";
+        r.id, r.source, r.external_id, r.family_id, r.title, r.image_url, r.source_url,
+        r.ready_minutes, r.servings, r.ingredients::text AS ingredients,
+        r.steps::text AS steps, r.rating, r.notes, r.tags, r.pulled_at";
+
+    /// <summary>
+    /// What makes a library row fair game this week. A dish that was once the
+    /// weekly dish (status 1) is spent for good; one rerolled out of this week
+    /// is only out until the week turns over; one tagged "not picked" is never
+    /// offered at all.
+    ///
+    /// Only the rotation asks this. The history list deliberately does not, so
+    /// a skipped dish is still there to be searched for, and naming one outright
+    /// still cooks it.
+    /// </summary>
+    private const string InThePool = @"
+        NOT EXISTS (SELECT 1
+                    FROM tracker.recipe_picks p
+                    WHERE p.recipe_id = r.id
+                      AND (p.status = 1 OR p.week_of = @weekOf))
+        AND NOT (r.tags && @skipTags::text[])";
+
+    /// <summary>
+    /// The library as the history list shows it. week_of is the week it was the
+    /// dish, or null if it has only ever been banked — the one column the
+    /// cooked/not-cooked filter turns on, so it is computed in a subselect and
+    /// filtered on from the outside.
+    /// </summary>
+    private const string SelectHistory = @"
+        SELECT r.id AS recipe_id, r.title, f.name AS family_name, r.image_url,
+               r.source_url, r.ready_minutes, r.servings, r.rating, r.notes,
+               r.tags, r.pulled_at,
+               (SELECT max(p.week_of)
+                FROM tracker.recipe_picks p
+                WHERE p.recipe_id = r.id AND p.status = 1) AS week_of
+        FROM tracker.recipe_recipes r
+        LEFT JOIN tracker.recipe_families f ON f.id = r.family_id";
 
     public async Task<List<RecipeFamily>> GetFamiliesAsync(IUnitOfWork unitOfWork)
     {
@@ -80,22 +115,34 @@ public class RecipesRepository : IRecipesRepository
     public async Task<Recipe?> GetRecipeAsync(Guid id, IUnitOfWork unitOfWork)
     {
         return await unitOfWork.Connection.QueryFirstOrDefaultAsync<Recipe>(
-            $"SELECT {SelectRecipe} FROM tracker.recipe_recipes WHERE id = @id",
+            $"SELECT {SelectRecipe} FROM tracker.recipe_recipes r WHERE r.id = @id",
             new { id },
             unitOfWork.Transaction);
     }
 
-    public async Task<List<string>> GetSeenExternalIdsAsync(string source, IUnitOfWork unitOfWork)
+    /// <summary>
+    /// Random rather than oldest-first: the pool is a bag of dishes nobody has
+    /// chosen between, and the whole scope is a lucky dip.
+    /// </summary>
+    public async Task<Recipe?> GetPoolRecipeAsync(int? familyId, DateOnly weekOf, IUnitOfWork unitOfWork)
     {
-        var rows = await unitOfWork.Connection.QueryAsync<string>(
-            "SELECT external_id FROM tracker.recipe_recipes WHERE source = @source",
-            new { source },
+        return await unitOfWork.Connection.QueryFirstOrDefaultAsync<Recipe>(
+            $@"SELECT {SelectRecipe}
+               FROM tracker.recipe_recipes r
+               WHERE (@familyId::int IS NULL OR r.family_id = @familyId)
+                 AND {InThePool}
+               ORDER BY random()
+               LIMIT 1",
+            new { familyId, weekOf, skipTags = new[] { RecipeTags.NotPicked } },
             unitOfWork.Transaction);
-
-        return rows.ToList();
     }
 
-    public async Task CreateRecipeAsync(Recipe recipe, IUnitOfWork unitOfWork)
+    /// <summary>
+    /// ux_recipe_recipes_external is what makes banking a whole pull safe to
+    /// repeat: a dish the source hands back a second time keeps the rating and
+    /// notes it already has instead of being reset.
+    /// </summary>
+    public async Task SaveRecipesAsync(List<Recipe> recipes, IUnitOfWork unitOfWork)
     {
         await unitOfWork.Connection.ExecuteAsync(
             @"INSERT INTO tracker.recipe_recipes
@@ -103,8 +150,71 @@ public class RecipesRepository : IRecipesRepository
                    ready_minutes, servings, ingredients, steps)
               VALUES
                   (@Id, @Source, @ExternalId, @FamilyId, @Title, @ImageUrl, @SourceUrl,
-                   @ReadyMinutes, @Servings, @Ingredients::jsonb, @Steps::jsonb)",
-            recipe,
+                   @ReadyMinutes, @Servings, @Ingredients::jsonb, @Steps::jsonb)
+              ON CONFLICT (source, external_id) DO NOTHING",
+            recipes,
+            unitOfWork.Transaction);
+    }
+
+    /// <summary>
+    /// Cooked means the week it was the dish has passed. This week's dish is
+    /// neither cooked nor back in the pool, so it only appears unfiltered — it
+    /// has its own tab.
+    /// </summary>
+    public async Task<List<RecipeHistoryItemDto>> QueryHistoryAsync(
+        string? search, string[]? tags, bool? cooked, DateOnly weekOf, IUnitOfWork unitOfWork)
+    {
+        var rows = await unitOfWork.Connection.QueryAsync<RecipeHistoryItemDto>(
+            $@"SELECT * FROM (
+                   {SelectHistory}
+                   WHERE (@search::text IS NULL OR r.title ILIKE @search OR r.notes ILIKE @search)
+                     AND (@tags::text[] IS NULL OR r.tags && @tags::text[])
+               ) x
+               WHERE (@cooked::boolean IS NULL
+                      OR (@cooked AND x.week_of IS NOT NULL AND x.week_of < @weekOf)
+                      OR (NOT @cooked AND x.week_of IS NULL))
+               ORDER BY x.week_of DESC NULLS LAST, x.pulled_at DESC",
+            new
+            {
+                search = string.IsNullOrWhiteSpace(search) ? null : $"%{search.Trim()}%",
+                tags = tags is { Length: > 0 } ? tags : null,
+                cooked,
+                weekOf
+            },
+            unitOfWork.Transaction);
+
+        return rows.ToList();
+    }
+
+    public async Task<RecipeHistoryItemDto?> GetHistoryItemAsync(Guid recipeId, IUnitOfWork unitOfWork)
+    {
+        return await unitOfWork.Connection.QueryFirstOrDefaultAsync<RecipeHistoryItemDto>(
+            $"{SelectHistory} WHERE r.id = @recipeId",
+            new { recipeId },
+            unitOfWork.Transaction);
+    }
+
+    public async Task<List<RecipeHistoryItemDto>> GetHistoryItemsBySourceAsync(string source, string[] externalIds, IUnitOfWork unitOfWork)
+    {
+        var rows = await unitOfWork.Connection.QueryAsync<RecipeHistoryItemDto>(
+            $@"{SelectHistory}
+               WHERE r.source = @source AND r.external_id = ANY(@externalIds::text[])
+               ORDER BY r.title",
+            new { source, externalIds },
+            unitOfWork.Transaction);
+
+        return rows.ToList();
+    }
+
+    public async Task UpdateRecipeMetaAsync(Guid recipeId, int? rating, string notes, string[] tags, IUnitOfWork unitOfWork)
+    {
+        await unitOfWork.Connection.ExecuteAsync(
+            @"UPDATE tracker.recipe_recipes
+              SET rating = @rating,
+                  notes  = @notes,
+                  tags   = @tags
+              WHERE id = @recipeId",
+            new { recipeId, rating, notes, tags },
             unitOfWork.Transaction);
     }
 

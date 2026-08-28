@@ -14,11 +14,12 @@ public class NullRecipeSource : IRecipeSource
 {
     public string Name => RecipeSourceNames.Null;
 
-    public Task<SourceRecipe?> PullAsync(string cuisine, IReadOnlyCollection<string> excludeExternalIds, CancellationToken cancellationToken)
-    {
-        throw new RecipeSourceException(
-            "No recipe source is configured.",
-            ExceptionCodes.RECIPE_SOURCE_NOT_CONFIGURED,
-            "Set Recipes:ApiKey (env: Recipes__ApiKey) to a Spoonacular API key.");
-    }
+    public Task<List<SourceRecipe>> PullAsync(string cuisine, CancellationToken cancellationToken) => throw NotConfigured();
+
+    public Task<List<SourceRecipe>> SearchAsync(string query, int number, CancellationToken cancellationToken) => throw NotConfigured();
+
+    private static RecipeSourceException NotConfigured() => new(
+        "No recipe source is configured.",
+        ExceptionCodes.RECIPE_SOURCE_NOT_CONFIGURED,
+        "Set Recipes:ApiKey (env: Recipes__ApiKey) to a Spoonacular API key.");
 }

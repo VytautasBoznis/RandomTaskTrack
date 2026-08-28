@@ -197,6 +197,11 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IValidator<GetWeeklyDishRequest>, GetWeeklyDishRequestValidator>();
         services.AddSingleton<IValidator<RerollDishRequest>, RerollDishRequestValidator>();
         services.AddSingleton<IValidator<CreateDishTaskRequest>, CreateDishTaskRequestValidator>();
+        services.AddSingleton<IValidator<SearchRecipesRequest>, SearchRecipesRequestValidator>();
+        services.AddSingleton<IValidator<SaveRecipesRequest>, SaveRecipesRequestValidator>();
+        services.AddSingleton<IValidator<SetWeeklyDishRequest>, SetWeeklyDishRequestValidator>();
+        services.AddSingleton<IValidator<UpdateRecipeRequest>, UpdateRecipeRequestValidator>();
+        services.AddSingleton<IValidator<GetRecipeHistoryRequest>, GetRecipeHistoryRequestValidator>();
 
         // Notes
         services.AddSingleton<IValidator<GetNotesRequest>, GetNotesRequestValidator>();
@@ -244,6 +249,11 @@ public static class ServiceCollectionExtensions
         services.AddScoped<GetWeeklyDishOperation>();
         services.AddScoped<RerollDishOperation>();
         services.AddScoped<CreateDishTaskOperation>();
+        services.AddScoped<SearchRecipesOperation>();
+        services.AddScoped<SaveRecipesOperation>();
+        services.AddScoped<SetWeeklyDishOperation>();
+        services.AddScoped<UpdateRecipeOperation>();
+        services.AddScoped<GetRecipeHistoryOperation>();
 
         // Notes
         services.AddScoped<GetNotesOperation>();

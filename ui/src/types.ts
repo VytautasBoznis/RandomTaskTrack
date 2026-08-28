@@ -148,8 +148,52 @@ export interface WeeklyDish {
   servings: number | null;
   ingredients: RecipeIngredient[];
   steps: string[];
+  rating: number | null;
+  notes: string;
+  tags: string[];
   /** Set once the dish is on the board. */
   taskId: string | null;
+}
+
+/**
+ * Mirrors RecipeTags.NotPicked. An ordinary tag the rotation happens to read:
+ * a dish carrying it is never offered, but stays searchable like any other.
+ */
+export const NOT_PICKED = 'not picked';
+
+/** A search result, straight from the source and not saved yet. */
+export interface RecipeCandidate {
+  externalId: string;
+  title: string;
+  imageUrl: string | null;
+  sourceUrl: string | null;
+  readyMinutes: number | null;
+  servings: number | null;
+  ingredients: RecipeIngredient[];
+  steps: string[];
+}
+
+/** A library row. `weekOf` null means saved but never cooked. */
+export interface RecipeHistoryItem {
+  recipeId: string;
+  title: string;
+  familyName: string | null;
+  imageUrl: string | null;
+  sourceUrl: string | null;
+  readyMinutes: number | null;
+  servings: number | null;
+  weekOf: string | null;
+  rating: number | null;
+  notes: string;
+  tags: string[];
+}
+
+/** Every field is optional; the server reads null as "leave alone". */
+export interface RecipeMetaDraft {
+  rating?: number | null;
+  clearRating?: boolean;
+  notes?: string;
+  tags?: string[];
 }
 
 export interface Note {

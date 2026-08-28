@@ -62,7 +62,11 @@
       "Bash(rm -rf /c/tmp/spoon-check)",
       "Bash(npm view *)",
       "Bash(echo \"react-markdown: $\\(npm view react-markdown version 2>/dev/null\\)\")",
-      "Bash(echo \"remark-gfm: $\\(npm view remark-gfm version 2>/dev/null\\)\")"
+      "Bash(echo \"remark-gfm: $\\(npm view remark-gfm version 2>/dev/null\\)\")",
+      "Bash(which psql *)",
+      "Bash(ls \"/c/Program Files/PostgreSQL/17/bin/\" 2>/dev/null | head -20)",
+      "Read(//c/Program Files/PostgreSQL/17/bin//**)",
+      "Bash(sc query *)"
     ]
   }
 }

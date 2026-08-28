@@ -3,16 +3,21 @@ using RandomTaskTrack.Data.Models.Recipes;
 namespace RandomTaskTrack.Interfaces.Recipes;
 
 /// <summary>
-/// Scoped to "give me one dish from this cuisine that I have not cooked" —
-/// the level at which recipe APIs actually agree. Paging, scoring and
-/// nutrition stay behind the implementation.
+/// Scoped to "give me dishes" — the level at which recipe APIs actually agree.
+/// Paging, scoring and nutrition stay behind the implementation.
+///
+/// Both methods return every usable candidate rather than one. The caller banks
+/// the lot and chooses from its own library, so a single metered call to the
+/// source is worth ten dishes instead of one.
 /// </summary>
 public interface IRecipeSource
 {
     string Name { get; }
 
     /// <param name="cuisine">The family's code, in the source's own vocabulary.</param>
-    /// <param name="excludeExternalIds">Dishes already cooked or offered.</param>
-    /// <returns>Null when the source had nothing new for that cuisine.</returns>
-    Task<SourceRecipe?> PullAsync(string cuisine, IReadOnlyCollection<string> excludeExternalIds, CancellationToken cancellationToken);
+    /// <returns>Empty when the source had nothing for that cuisine.</returns>
+    Task<List<SourceRecipe>> PullAsync(string cuisine, CancellationToken cancellationToken);
+
+    /// <summary>Free-text search, for overriding the cuisine rotation outright.</summary>
+    Task<List<SourceRecipe>> SearchAsync(string query, int number, CancellationToken cancellationToken);
 }

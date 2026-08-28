@@ -9,8 +9,9 @@ public class RecipeOptions
 
     public string BaseUrl { get; set; } = "https://api.spoonacular.com";
 
-    /// <summary>How many random dishes to ask for per pull. Only the first one
-    /// that has not been cooked before is kept, so this is the tolerance for
-    /// repeats, not a page size.</summary>
+    /// <summary>How many dishes to ask for per call. All of them are banked in
+    /// the library, so this is how many dishes one unit of quota buys — raising
+    /// it means fewer calls, not more repeats. Doubles as the default page size
+    /// for targeted search.</summary>
     public int CandidatesPerPull { get; set; } = 10;
 }

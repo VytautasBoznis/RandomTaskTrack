@@ -31,31 +31,7 @@ public class RecipePicker : IRecipePicker
     {
         RecipeFamily family = await ResolveFamilyAsync(familyId, unitOfWork);
 
-        // Everything ever pulled is excluded, which is the whole point: the
-        // scope exists to cook things that have not been cooked.
-        List<string> alreadySeen = await _recipesRepository.GetSeenExternalIdsAsync(_source.Name, unitOfWork);
-
-        SourceRecipe pulled = await _source.PullAsync(family.Code, alreadySeen, cancellationToken)
-                              ?? throw new NotFoundException(
-                                  $"No new {family.Name} dish came back — every candidate has been cooked already. Try another family.",
-                                  ExceptionCodes.RECIPE_NO_NEW_DISHES);
-
-        var recipe = new Recipe
-        {
-            Id = Guid.NewGuid(),
-            Source = _source.Name,
-            ExternalId = pulled.ExternalId,
-            FamilyId = family.Id,
-            Title = pulled.Title,
-            ImageUrl = pulled.ImageUrl,
-            SourceUrl = pulled.SourceUrl,
-            ReadyMinutes = pulled.ReadyMinutes,
-            Servings = pulled.Servings,
-            Ingredients = RecipeMapper.Serialize(pulled.Ingredients),
-            Steps = RecipeMapper.Serialize(pulled.Steps)
-        };
-
-        await _recipesRepository.CreateRecipeAsync(recipe, unitOfWork);
+        Recipe recipe = await TakeFromPoolAsync(family, weekOf, unitOfWork, cancellationToken);
 
         var pick = new RecipePick
         {
@@ -73,11 +49,48 @@ public class RecipePicker : IRecipePicker
         }
 
         // Two tabs opened at once. The other request's dish is just as good, and
-        // the one pulled here stays in recipe_recipes so it is not offered again.
+        // the one taken here never got a pick row, so it stays in the pool for
+        // next week rather than being burnt.
         _logger.LogInformation("Week of {WeekOf} already had a dish; keeping it", weekOf);
 
         return await _recipesRepository.GetCurrentPickAsync(weekOf, unitOfWork)
                ?? throw new NotFoundException("The week's dish disappeared mid-pick.", ExceptionCodes.RECIPE_PICK_NOT_FOUND);
+    }
+
+    /// <summary>
+    /// The library first, the source only when it has nothing. A pull banks
+    /// every candidate it got, so the call that finds one dish also stocks the
+    /// next nine — which is what keeps rerolling free and stops the pool running
+    /// dry after a handful of weeks.
+    /// </summary>
+    private async Task<Recipe> TakeFromPoolAsync(RecipeFamily family, DateOnly weekOf, IUnitOfWork unitOfWork, CancellationToken cancellationToken)
+    {
+        Recipe? banked = await _recipesRepository.GetPoolRecipeAsync(family.Id, weekOf, unitOfWork);
+
+        if (banked is not null)
+        {
+            return banked;
+        }
+
+        List<SourceRecipe> pulled = await _source.PullAsync(family.Code, cancellationToken);
+
+        _logger.LogInformation("Pool was empty for {Family}; banked {Count} dishes from {Source}", family.Name, pulled.Count, _source.Name);
+
+        if (pulled.Count > 0)
+        {
+            await _recipesRepository.SaveRecipesAsync(
+                pulled.Select(dish => RecipeMapper.ToRecipe(dish, _source.Name, family.Id)).ToList(),
+                unitOfWork);
+        }
+
+        // Re-read rather than picking from `pulled`: some of those dishes were
+        // already in the library and the insert skipped them, and the pool query
+        // is the one place that knows which are still fair game.
+        return await _recipesRepository.GetPoolRecipeAsync(family.Id, weekOf, unitOfWork)
+               ?? throw new NotFoundException(
+                   $"No new {family.Name} dish came back — every candidate has been cooked already. " +
+                   "Try another family, or search for a dish by name.",
+                   ExceptionCodes.RECIPE_NO_NEW_DISHES);
     }
 
     private async Task<RecipeFamily> ResolveFamilyAsync(int? familyId, IUnitOfWork unitOfWork)

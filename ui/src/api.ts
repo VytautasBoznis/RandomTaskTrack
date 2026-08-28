@@ -6,7 +6,10 @@ import type {
   Dashboard,
   Note,
   NoteDraft,
+  RecipeCandidate,
   RecipeFamily,
+  RecipeHistoryItem,
+  RecipeMetaDraft,
   Recurrence,
   RecurrenceDraft,
   Session,
@@ -154,6 +157,47 @@ export const createDishTask = (pickId: string, dueOn: string | null) =>
     method: 'POST',
     body: JSON.stringify({ pickId, dueOn }),
   });
+
+// Reads only — nothing is stored until saveRecipes sends the chosen ones back.
+export const searchRecipes = async (query: string) =>
+  (await request<{ candidates: RecipeCandidate[] }>(`/recipes/search?query=${encodeURIComponent(query)}`))
+    .candidates;
+
+export const saveRecipes = async (recipes: RecipeCandidate[]) =>
+  (
+    await request<{ recipes: RecipeHistoryItem[] }>('/recipes/library', {
+      method: 'POST',
+      body: JSON.stringify({ recipes }),
+    })
+  ).recipes;
+
+export const setWeeklyDish = async (recipeId: string) =>
+  (
+    await request<{ dish: WeeklyDish }>('/recipes/pick', {
+      method: 'POST',
+      body: JSON.stringify({ recipeId }),
+    })
+  ).dish;
+
+export const getRecipeHistory = async (search: string, tags: string[], cooked: boolean | null) => {
+  const query = new URLSearchParams();
+
+  if (search !== '') query.set('search', search);
+  if (tags.length > 0) query.set('tags', tags.join(','));
+  if (cooked !== null) query.set('cooked', String(cooked));
+
+  const suffix = query.toString() === '' ? '' : `?${query}`;
+
+  return (await request<{ entries: RecipeHistoryItem[] }>(`/recipes/history${suffix}`)).entries;
+};
+
+export const updateRecipe = async (recipeId: string, draft: RecipeMetaDraft) =>
+  (
+    await request<{ recipe: RecipeHistoryItem }>(`/recipes/${recipeId}`, {
+      method: 'PUT',
+      body: JSON.stringify(draft),
+    })
+  ).recipe;
 
 export const getNotes = async () => (await request<{ notes: Note[] }>('/notes')).notes;
 

@@ -66,13 +66,20 @@ Jenkinsfile   build → push → deploy
 | POST | `/api/tasks` · PUT `/api/tasks/{id}` · DELETE `/api/tasks/{id}` | |
 | POST | `/api/tasks/{id}/complete` | tick + log + chain the next occurrence |
 | GET/POST/PUT/DELETE | `/api/recurrences` | |
+| GET | `/api/recipes/weekly` | this week's dish; pulls one if the week has none |
+| POST | `/api/recipes/reroll` · `/api/recipes/task` | swap the dish · put it on the board |
+| GET | `/api/recipes/search?query=` | ask the source by name — saves nothing |
+| POST | `/api/recipes/library` | bank the search results worth keeping |
+| POST | `/api/recipes/pick` | cook a named library dish this week |
+| GET | `/api/recipes/history` | the cookbook — filter by `search`, `tags`, `cooked` |
+| PUT | `/api/recipes/{id}` | rating, notes, tags |
 | GET/POST/PUT/DELETE | `/api/notes` | markdown notes, newest edit first |
 | POST | `/api/chat/messages` | one agent turn |
 | GET | `/api/chat/conversations`, `/api/chat/conversations/{id}` | |
 
 Tokens last **30 days** — the tablet is a permanently signed-in kiosk.
 
-## Two things worth knowing before changing anything
+## Three things worth knowing before changing anything
 
 **Recurrences are materialized, not computed.** Instances are written into
 `task_tasks` ahead of time (21-day horizon, hourly background sweep), so the
@@ -83,6 +90,23 @@ partial unique index on `(recurrence_id, due_on)` makes the sweep idempotent.
 cadence; `from_completion` restarts the interval from the actual completion date
 — clean the bathroom on day 9 of a 7-day cycle and the next one is day 16, not
 day 14. Chosen per recurrence, because there is no right default.
+
+**`recipe_recipes` is a library, not an already-seen list.** A pull asks the
+source for ten dishes and banks all ten, so one unit of quota is worth ten
+dishes and rerolling is usually free. What stops a repeat is `recipe_picks`: a
+dish that was once the weekly dish (`status = 1`) is spent for good, a rerolled
+one (`status = 2`) is only out until the week turns over, and anything with
+neither is in the pool. That predicate lives in `RecipesRepository.InThePool`
+and is the definition the rotation, the history filter and the cookbook all
+share. It used to be the other way round — the library *was* the exclusion list,
+and each pull threw nine dishes away — which is what made the weekly pick
+eventually answer "every candidate has been cooked already".
+
+Banking whole pulls means dishes arrive that nobody chose, so the `not picked`
+tag (`RecipeTags.NotPicked`) takes one out of the rotation for good. It is a
+plain tag, not a column, which is the point: a skipped dish still shows in
+History, is still found by its other tags, and can still be cooked by naming it
+outright — it just never comes back on a reroll.
 
 ## Kubernetes
 

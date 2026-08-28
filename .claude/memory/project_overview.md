@@ -60,8 +60,8 @@ docker-compose.yml     db → migrate (one-shot yuniql) → api
 | `task_completions` | Append-only. planned vs actual. Never updated in place. |
 | `chat_conversations` / `chat_messages` | Provider-neutral chat history. |
 | `recipe_families` | Cuisine families, in the source's own vocabulary. The weekly pick rotates to whichever has gone longest unused. |
-| `recipe_recipes` | Every dish ever pulled. Doubles as the "already cooked" list. |
-| `recipe_picks` | One dish per ISO week. Partial unique index on `(week_of) WHERE status = 1`. |
+| `recipe_recipes` | The library — every dish ever pulled or saved, plus rating, notes and tags. Mostly uncooked; it is a pool, not an exclusion list. The `not picked` tag takes one out of the rotation without hiding it. |
+| `recipe_picks` | One dish per ISO week, and the "already cooked" list. Partial unique index on `(week_of) WHERE status = 1`. |
 | `note_notes` | Free-form markdown, attached to nothing — no domain, no schedule, no completion. |
 
 Domain-specific payloads live in `jsonb` `data` columns (sets/reps/weight, water
@@ -71,7 +71,8 @@ ml, recipe id) rather than in per-domain tables.
 
 `/api/auth` (login, register, change-password) · `/api/domains` ·
 `/api/tasks` (+ `/dashboard`, `/completions`, `/{id}/complete`) ·
-`/api/recurrences` · `/api/recipes` (weekly, reroll, task) · `/api/notes` ·
+`/api/recurrences` · `/api/recipes` (weekly, reroll, task, search, library, pick,
+history, `PUT /{id}`) · `/api/notes` ·
 `/api/chat` (conversations, messages) · `/health`
 
 ## Not built yet

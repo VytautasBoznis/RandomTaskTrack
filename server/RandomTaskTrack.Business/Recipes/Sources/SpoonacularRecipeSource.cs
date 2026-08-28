@@ -12,9 +12,10 @@ namespace RandomTaskTrack.Business.Recipes.Sources;
 
 /// <summary>
 /// Spoonacular's /recipes/random returns whole recipes — ingredients and
-/// instructions included — so one call per pull is enough. complexSearch would
-/// need a second /information call for the ingredient list, and the free tier
-/// is metered per call.
+/// instructions included — so one call per pull is enough. complexSearch needs
+/// addRecipeInformation and fillIngredients to return the same thing, but with
+/// them it does, so targeted search is also one call. The free tier is metered
+/// per call, which is why neither path ever makes a second one.
 /// </summary>
 public partial class SpoonacularRecipeSource : IRecipeSource
 {
@@ -34,21 +35,50 @@ public partial class SpoonacularRecipeSource : IRecipeSource
         _logger = logger;
     }
 
-    public async Task<SourceRecipe?> PullAsync(string cuisine, IReadOnlyCollection<string> excludeExternalIds, CancellationToken cancellationToken)
+    /// <summary>
+    /// Every usable candidate, not just the first. One call is metered the same
+    /// whether the caller keeps one dish or ten, and the caller banks them all.
+    /// </summary>
+    public async Task<List<SourceRecipe>> PullAsync(string cuisine, CancellationToken cancellationToken)
+    {
+        string url = $"{_options.BaseUrl.TrimEnd('/')}/recipes/random" +
+                     $"?number={_options.CandidatesPerPull}" +
+                     $"&include-tags={Uri.EscapeDataString(cuisine)}";
+
+        return await GetCandidatesAsync(url, "recipes", $"cuisine {cuisine}", cancellationToken);
+    }
+
+    /// <summary>
+    /// complexSearch rather than random. addRecipeInformation and fillIngredients
+    /// make it return the same recipe shape random does, so one call is still
+    /// enough and every reader below is shared — the array is just named
+    /// "results" instead of "recipes". instructionsRequired drops the dishes that
+    /// would fail the no-method check anyway.
+    /// </summary>
+    public async Task<List<SourceRecipe>> SearchAsync(string query, int number, CancellationToken cancellationToken)
+    {
+        string url = $"{_options.BaseUrl.TrimEnd('/')}/recipes/complexSearch" +
+                     $"?query={Uri.EscapeDataString(query)}" +
+                     $"&number={number}" +
+                     "&addRecipeInformation=true" +
+                     "&fillIngredients=true" +
+                     "&instructionsRequired=true";
+
+        return await GetCandidatesAsync(url, "results", $"query {query}", cancellationToken);
+    }
+
+    private async Task<List<SourceRecipe>> GetCandidatesAsync(string url, string arrayName, string what, CancellationToken cancellationToken)
     {
         HttpClient client = _httpClientFactory.CreateClient(RecipeSourceNames.Spoonacular);
 
-        string url = $"{_options.BaseUrl.TrimEnd('/')}/recipes/random" +
-                     $"?number={_options.CandidatesPerPull}" +
-                     $"&include-tags={Uri.EscapeDataString(cuisine)}" +
-                     $"&apiKey={Uri.EscapeDataString(_options.ApiKey)}";
-
-        using HttpResponseMessage response = await client.GetAsync(url, cancellationToken);
+        using HttpResponseMessage response = await client.GetAsync(
+            $"{url}&apiKey={Uri.EscapeDataString(_options.ApiKey)}",
+            cancellationToken);
 
         if (!response.IsSuccessStatusCode)
         {
             // The key is in the query string, so the URL never goes in a log line.
-            _logger.LogError("Spoonacular returned {Status} for cuisine {Cuisine}", (int)response.StatusCode, cuisine);
+            _logger.LogError("Spoonacular returned {Status} for {What}", (int)response.StatusCode, what);
 
             throw new RecipeSourceException(
                 "The recipe service could not be reached.",
@@ -59,16 +89,18 @@ public partial class SpoonacularRecipeSource : IRecipeSource
         await using Stream stream = await response.Content.ReadAsStreamAsync(cancellationToken);
         using JsonDocument document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
 
-        if (!document.RootElement.TryGetProperty("recipes", out JsonElement recipes))
+        var candidates = new List<SourceRecipe>();
+
+        if (!document.RootElement.TryGetProperty(arrayName, out JsonElement array) || array.ValueKind != JsonValueKind.Array)
         {
-            return null;
+            return candidates;
         }
 
-        foreach (JsonElement candidate in recipes.EnumerateArray())
+        foreach (JsonElement candidate in array.EnumerateArray())
         {
             string externalId = ReadId(candidate);
 
-            if (externalId.Length == 0 || excludeExternalIds.Contains(externalId))
+            if (externalId.Length == 0)
             {
                 continue;
             }
@@ -81,7 +113,7 @@ public partial class SpoonacularRecipeSource : IRecipeSource
                 continue;
             }
 
-            return new SourceRecipe
+            candidates.Add(new SourceRecipe
             {
                 ExternalId = externalId,
                 Title = ReadString(candidate, "title") ?? "Untitled dish",
@@ -91,10 +123,10 @@ public partial class SpoonacularRecipeSource : IRecipeSource
                 Servings = ReadInt(candidate, "servings"),
                 Ingredients = ReadIngredients(candidate),
                 Steps = steps
-            };
+            });
         }
 
-        return null;
+        return candidates;
     }
 
     private static string ReadId(JsonElement recipe)

@@ -15,6 +15,7 @@ public static class ExceptionCodes
     public const string CONVERSATION_NOT_FOUND = "CONVERSATION_NOT_FOUND";
     public const string NOTE_NOT_FOUND = "NOTE_NOT_FOUND";
 
+    public const string RECIPE_NOT_FOUND = "RECIPE_NOT_FOUND";
     public const string RECIPE_PICK_NOT_FOUND = "RECIPE_PICK_NOT_FOUND";
     public const string RECIPE_FAMILY_NOT_FOUND = "RECIPE_FAMILY_NOT_FOUND";
     public const string RECIPE_NO_FAMILIES = "RECIPE_NO_FAMILIES";

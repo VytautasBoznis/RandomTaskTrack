@@ -340,6 +340,10 @@ label.checkbox input {
   margin: 0;
   text-transform: none;
   letter-spacing: 0;
+  /* A flex item won't shrink past its content without this, so a long title
+     would push the actions off the card instead of wrapping. */
+  min-width: 0;
+  overflow-wrap: break-word;
 }
 
 /* Wider than the task form: a markdown body is written, not filled in. */
@@ -349,6 +353,13 @@ label.checkbox input {
 
 /* Rendered markdown. The global ul/li rules are built for task rows, so a note
    body has to be handed its defaults back. */
+
+/* Long URLs and unbroken strings wrap inside the card rather than overflowing
+   it. Code blocks are unaffected — they don't wrap, so they keep scrolling. */
+.markdown {
+  overflow-wrap: break-word;
+}
+
 .markdown > :first-child {
   margin-top: 0;
 }
@@ -504,6 +515,71 @@ label.checkbox input {
 
 .composer input {
   flex: 1;
+}
+
+/* Recipe sub-tabs sit inside a view, so they are lighter than the top nav. */
+nav.sub {
+  border-bottom: none;
+  margin-bottom: 12px;
+}
+
+nav.sub button.tab {
+  padding: 6px 12px;
+}
+
+/* The search and history filter bars put their inputs straight in the toolbar
+   and want the room; every other toolbar holds text and a button. */
+.toolbar > input {
+  flex: 1;
+  min-width: 0;
+}
+
+.meta {
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 16px;
+}
+
+.stars {
+  align-items: center;
+  display: flex;
+  gap: 4px;
+}
+
+.star {
+  background: none;
+  color: var(--line);
+  font-size: 24px;
+  line-height: 1;
+  padding: 2px 4px;
+}
+
+.star.on {
+  color: var(--accent);
+}
+
+.stars-read {
+  color: var(--accent);
+  letter-spacing: 2px;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 8px;
+}
+
+.tag {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 12px;
+  padding: 2px 10px;
 }
 
 @media (max-width: 720px) {
