@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { createDishTask, getWeeklyDish, rerollDish, updateRecipe } from '../api';
+import { clearWeeklyDish, createDishTask, getWeeklyDish, rerollDish, updateRecipe } from '../api';
 import { useApiError } from '../hooks';
 import RecipeMeta from './RecipeMeta';
 import type { RecipeFamily, RecipeMetaDraft, WeeklyDish } from '../types';
@@ -18,15 +18,19 @@ function loadChecked(pickId: string): string[] {
 export default function RecipeWeekly({ onUnauthorized }: { onUnauthorized: () => void }) {
   const { error, setError, fail } = useApiError(onUnauthorized);
   const [dish, setDish] = useState<WeeklyDish | null>(null);
+  // Distinct from `dish === null`, which is also the state before the first
+  // load has come back. Without this the empty week flashes the spinner.
+  const [loaded, setLoaded] = useState(false);
   const [families, setFamilies] = useState<RecipeFamily[]>([]);
   const [familyId, setFamilyId] = useState<number | null>(null);
   const [checked, setChecked] = useState<string[]>([]);
   const [dueOn, setDueOn] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const show = useCallback((next: WeeklyDish) => {
+  const show = useCallback((next: WeeklyDish | null) => {
     setDish(next);
-    setChecked(loadChecked(next.pickId));
+    setChecked(next === null ? [] : loadChecked(next.pickId));
+    setLoaded(true);
   }, []);
 
   useEffect(() => {
@@ -37,6 +41,20 @@ export default function RecipeWeekly({ onUnauthorized }: { onUnauthorized: () =>
       })
       .catch(fail);
   }, [fail, show]);
+
+  async function clear() {
+    setBusy(true);
+    setError(null);
+
+    try {
+      await clearWeeklyDish();
+      show(null);
+    } catch (e) {
+      fail(e);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   function toggle(item: string) {
     if (dish === null) {
@@ -95,8 +113,49 @@ export default function RecipeWeekly({ onUnauthorized }: { onUnauthorized: () =>
     }
   }
 
-  if (!dish) {
+  if (!loaded) {
     return error ? <p className="error">{error}</p> : <p className="empty">Finding this week's dish…</p>;
+  }
+
+  // Nothing on the board. Reached by clearing a dish, or by the rotation coming
+  // up empty — either way it is a normal state with three ways out, not an
+  // error, and it stays cleared until something is chosen.
+  if (dish === null) {
+    return (
+      <>
+        <div className="toolbar">
+          <p className="today">No dish this week.</p>
+
+          <span className="actions">
+            <select
+              value={familyId ?? ''}
+              onChange={(e) => setFamilyId(e.target.value === '' ? null : Number(e.target.value))}
+            >
+              <option value="">Next in rotation</option>
+              {families.map((family) => (
+                <option key={family.id} value={family.id}>
+                  {family.name}
+                </option>
+              ))}
+            </select>
+
+            <button type="button" disabled={busy} onClick={reroll}>
+              {busy ? 'Rolling…' : 'Pick one for me'}
+            </button>
+          </span>
+        </div>
+
+        {error && <p className="error">{error}</p>}
+
+        <section className="card">
+          <p className="notes">
+            Or choose one yourself — <strong>Find a dish</strong> searches by name, and <strong>History</strong>
+            {' '}has everything saved but not cooked, with a <strong>Cook this week</strong> on each. Those two need
+            no online quota.
+          </p>
+        </section>
+      </>
+    );
   }
 
   return (
@@ -153,6 +212,12 @@ export default function RecipeWeekly({ onUnauthorized }: { onUnauthorized: () =>
               Original recipe ↗
             </a>
           )}
+
+          {/* The way off the board that does not need the rotation. Reroll
+              replaces the dish and costs a source call; this just clears it. */}
+          <button type="button" className="link" disabled={busy} onClick={clear}>
+            Not cooking this
+          </button>
         </div>
 
         {/* Keyed on the recipe so a reroll resets the editor rather than

@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using CsvHelper;
 using CsvHelper.Configuration;
 using Microsoft.Extensions.Logging;
@@ -32,7 +33,7 @@ namespace RandomTaskTrack.Business.Recipes;
 /// temp table goes with the connection and the single promoting statement either
 /// commits whole or not at all.
 /// </summary>
-public class RecipeCatalogImporter : IRecipeCatalogImporter
+public partial class RecipeCatalogImporter : IRecipeCatalogImporter
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -155,16 +156,48 @@ public class RecipeCatalogImporter : IRecipeCatalogImporter
 
         await using (var staging = new NpgsqlCommand(
             @"CREATE TEMP TABLE catalog_staging
-                  (external_id text, title text, ingredients jsonb, steps jsonb, link text)
+                  (external_id text, title text, ingredients jsonb, steps jsonb, link text,
+                   image_url text, ready_minutes int, servings int, feed text)
               ON COMMIT PRESERVE ROWS", connection))
         {
             await staging.ExecuteNonQueryAsync();
         }
 
+        long added = 0;
+
+        // Rich feed first: it is 64MB against 2GB, so the pictured dishes are in
+        // place within seconds rather than after the long tail has finished.
+        added += await ImportFeedAsync(connection, Feeds.AllRecipes, _options.CatalogRichUrl, ParseAllRecipes);
+        added += await ImportFeedAsync(connection, Feeds.RecipeNlg, _options.CatalogUrl, ParseRecipeNlg);
+
+        return added;
+    }
+
+    /// <summary>
+    /// Skips a feed that already has rows. Without this, "check for new" would
+    /// re-stream two gigabytes to discover it has them all — and adding the
+    /// second feed to an existing install would cost that for nothing.
+    /// </summary>
+    private async Task<long> ImportFeedAsync(
+        NpgsqlConnection connection, string feed, string url, Func<CsvReader, string, CatalogRow?> parse)
+    {
+        await using (var loaded = new NpgsqlCommand(
+            "SELECT EXISTS (SELECT 1 FROM tracker.recipe_catalog WHERE feed = @feed)", connection))
+        {
+            loaded.Parameters.AddWithValue("feed", feed);
+
+            if ((bool)(await loaded.ExecuteScalarAsync() ?? false))
+            {
+                _logger.LogInformation("Feed {Feed} is already loaded; skipping", feed);
+
+                return 0;
+            }
+        }
+
         HttpClient client = _httpClientFactory.CreateClient(nameof(RecipeCatalogImporter));
         client.Timeout = Timeout.InfiniteTimeSpan;
 
-        using HttpResponseMessage response = await client.GetAsync(_options.CatalogUrl, HttpCompletionOption.ResponseHeadersRead);
+        using HttpResponseMessage response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
         response.EnsureSuccessStatusCode();
 
         await using Stream stream = await response.Content.ReadAsStreamAsync();
@@ -201,7 +234,7 @@ public class RecipeCatalogImporter : IRecipeCatalogImporter
                     _rowsRead++;
                 }
 
-                CatalogRow? row = Parse(csv);
+                CatalogRow? row = parse(csv, feed);
 
                 if (row is null)
                 {
@@ -213,15 +246,11 @@ public class RecipeCatalogImporter : IRecipeCatalogImporter
                 await writer.WriteAsync(row.Title);
                 await writer.WriteAsync(row.Ingredients, NpgsqlDbType.Jsonb);
                 await writer.WriteAsync(row.Steps, NpgsqlDbType.Jsonb);
-
-                if (row.Link is null)
-                {
-                    await writer.WriteNullAsync();
-                }
-                else
-                {
-                    await writer.WriteAsync(row.Link);
-                }
+                await WriteNullableAsync(writer, row.Link);
+                await WriteNullableAsync(writer, row.ImageUrl);
+                await WriteNullableAsync(writer, row.ReadyMinutes);
+                await WriteNullableAsync(writer, row.Servings);
+                await writer.WriteAsync(feed);
 
                 written++;
 
@@ -258,15 +287,43 @@ public class RecipeCatalogImporter : IRecipeCatalogImporter
 
     private static Task<NpgsqlBinaryImporter> OpenAsync(NpgsqlConnection connection) =>
         connection.BeginBinaryImportAsync(
-            "COPY catalog_staging (external_id, title, ingredients, steps, link) FROM STDIN (FORMAT BINARY)");
+            @"COPY catalog_staging
+                  (external_id, title, ingredients, steps, link, image_url, ready_minutes, servings, feed)
+              FROM STDIN (FORMAT BINARY)");
+
+    private static async Task WriteNullableAsync<T>(NpgsqlBinaryImporter writer, T? value) where T : class
+    {
+        if (value is null)
+        {
+            await writer.WriteNullAsync();
+        }
+        else
+        {
+            await writer.WriteAsync(value);
+        }
+    }
+
+    private static async Task WriteNullableAsync(NpgsqlBinaryImporter writer, int? value)
+    {
+        if (value is null)
+        {
+            await writer.WriteNullAsync();
+        }
+        else
+        {
+            await writer.WriteAsync(value.Value);
+        }
+    }
 
     /// <summary>Staging into the catalog, one row per external_id, then empties
     /// staging so the next batch starts clean.</summary>
     private static async Task<long> PromoteAsync(NpgsqlConnection connection)
     {
         await using var promote = new NpgsqlCommand(
-            @"INSERT INTO tracker.recipe_catalog (external_id, title, ingredients, steps, link)
-              SELECT DISTINCT ON (external_id) external_id, title, ingredients, steps, link
+            @"INSERT INTO tracker.recipe_catalog
+                  (external_id, title, ingredients, steps, link, image_url, ready_minutes, servings, feed)
+              SELECT DISTINCT ON (external_id)
+                     external_id, title, ingredients, steps, link, image_url, ready_minutes, servings, feed
               FROM catalog_staging
               ON CONFLICT (external_id) DO NOTHING",
             connection);
@@ -283,7 +340,77 @@ public class RecipeCatalogImporter : IRecipeCatalogImporter
         return added;
     }
 
-    private static CatalogRow? Parse(CsvReader csv)
+    /// <summary>
+    /// AllRecipes: ingredients are one semicolon-separated line and the method
+    /// is a paragraph, so both are split here rather than stored as prose. The
+    /// payoff is image, time and servings, which the other feed has none of.
+    /// </summary>
+    private static CatalogRow? ParseAllRecipes(CsvReader csv, string feed)
+    {
+        string title = Clean(Field(csv, "title"));
+
+        if (title.Length == 0)
+        {
+            return null;
+        }
+
+        List<string> ingredients = Clean(Field(csv, "ingredients"))
+            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToList();
+
+        // Sentence ends followed by a capital. Splitting on every full stop
+        // would cut "350 degrees F (175 degrees C)." and "10 to 15 minutes."
+        // into fragments the way the other corpus already suffers from.
+        List<string> steps = SentenceBreak()
+            .Split(Clean(Field(csv, "directions")))
+            .Select(step => step.Trim())
+            .Where(step => step.Length > 1)
+            .ToList();
+
+        if (ingredients.Count == 0 || steps.Count == 0)
+        {
+            return null;
+        }
+
+        string link = Clean(Field(csv, "url"));
+        string image = Clean(Field(csv, "image"));
+
+        return new CatalogRow
+        {
+            ExternalId = Hash(title, link),
+            Title = title.Length > 500 ? title[..500] : title,
+            Ingredients = JsonSerializer.Serialize(ingredients.Select(item => new { item, amount = (string?)null }), Json),
+            Steps = JsonSerializer.Serialize(steps, Json),
+            Link = link.Length == 0 ? null : link,
+            // Only http links: the field is occasionally a bare filename.
+            ImageUrl = image.StartsWith("http", StringComparison.OrdinalIgnoreCase) ? image : null,
+            ReadyMinutes = ParseMinutes(Field(csv, "total_time")),
+            Servings = int.TryParse(Field(csv, "servings"), out int s) && s > 0 ? s : null,
+            Feed = feed
+        };
+    }
+
+    /// <summary>"55 mins", "1 hr 20 mins", "1 hr" — null when it says none of those.</summary>
+    private static int? ParseMinutes(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        Match hours = HoursPart().Match(value);
+        Match minutes = MinutesPart().Match(value);
+
+        int total = (hours.Success ? int.Parse(hours.Groups[1].Value) * 60 : 0)
+                  + (minutes.Success ? int.Parse(minutes.Groups[1].Value) : 0);
+
+        return total > 0 ? total : null;
+    }
+
+    private static string Field(CsvReader csv, string name) =>
+        csv.TryGetField(name, out string? value) ? value ?? "" : "";
+
+    private static CatalogRow? ParseRecipeNlg(CsvReader csv, string feed)
     {
         string title = Clean(csv.TryGetField("title", out string? t) ? t : null);
 
@@ -320,7 +447,13 @@ public class RecipeCatalogImporter : IRecipeCatalogImporter
             // is nothing to split out.
             Ingredients = JsonSerializer.Serialize(ingredients.Select(item => new { item, amount = (string?)null }), Json),
             Steps = JsonSerializer.Serialize(steps, Json),
-            Link = link.Length == 0 ? null : link
+            Link = link.Length == 0 ? null : link,
+            // This corpus has no media or timings at all — that gap is exactly
+            // why the AllRecipes feed exists alongside it.
+            ImageUrl = null,
+            ReadyMinutes = null,
+            Servings = null,
+            Feed = feed
         };
     }
 
@@ -399,6 +532,21 @@ public class RecipeCatalogImporter : IRecipeCatalogImporter
     private static string Hash(string title, string? link) =>
         Convert.ToHexString(MD5.HashData(Encoding.UTF8.GetBytes($"{title}|{link}"))).ToLowerInvariant();
 
+    [GeneratedRegex(@"(?<=[.!?])\s+(?=[A-Z])")]
+    private static partial Regex SentenceBreak();
+
+    [GeneratedRegex(@"(\d+)\s*h", RegexOptions.IgnoreCase)]
+    private static partial Regex HoursPart();
+
+    [GeneratedRegex(@"(\d+)\s*m", RegexOptions.IgnoreCase)]
+    private static partial Regex MinutesPart();
+
+    private static class Feeds
+    {
+        public const string RecipeNlg = "recipenlg";
+        public const string AllRecipes = "allrecipes";
+    }
+
     private sealed class CatalogRow
     {
         public required string ExternalId { get; init; }
@@ -406,5 +554,9 @@ public class RecipeCatalogImporter : IRecipeCatalogImporter
         public required string Ingredients { get; init; }
         public required string Steps { get; init; }
         public required string? Link { get; init; }
+        public required string? ImageUrl { get; init; }
+        public required int? ReadyMinutes { get; init; }
+        public required int? Servings { get; init; }
+        public required string Feed { get; init; }
     }
 }

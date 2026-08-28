@@ -94,6 +94,15 @@ public class RecipesController : BaseController
         return Ok(await _operationFactory.Get<GetRecipeHistoryOperation>().Run(request));
     }
 
+    /// <summary>Takes this week's dish off the board without picking another.</summary>
+    [HttpDelete("pick")]
+    public async Task<IActionResult> ClearPick()
+    {
+        var request = new ClearWeeklyDishRequest { SessionUserData = GetSessionModelFromJwt() };
+
+        return Ok(await _operationFactory.Get<ClearWeeklyDishOperation>().Run(request));
+    }
+
     /// <summary>How much of the bulk catalog is loaded, and whether a run is going.</summary>
     [HttpGet("catalog")]
     public async Task<IActionResult> CatalogStatus()

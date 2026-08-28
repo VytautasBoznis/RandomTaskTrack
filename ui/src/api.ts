@@ -142,8 +142,12 @@ export const deleteRecurrence = (id: string) =>
   request<{ success: boolean; deletedTaskCount: number }>(`/recurrences/${id}`, { method: 'DELETE' });
 
 // The weekly dish is pulled on first read of the week, so this GET can write.
+// `dish` is null when the week has been deliberately cleared.
 export const getWeeklyDish = () =>
-  request<{ dish: WeeklyDish; families: RecipeFamily[] }>('/recipes/weekly');
+  request<{ dish: WeeklyDish | null; families: RecipeFamily[] }>('/recipes/weekly');
+
+export const clearWeeklyDish = () =>
+  request<{ cleared: boolean }>('/recipes/pick', { method: 'DELETE' });
 
 export const rerollDish = async (familyId: number | null) =>
   (

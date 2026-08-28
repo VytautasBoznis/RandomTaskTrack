@@ -23,9 +23,19 @@ public class RecipeOptions
     public string CatalogUrl { get; set; } =
         "https://huggingface.co/datasets/SandhyaKilari/RecipeNLG_dataset/resolve/main/RecipeNLG_dataset.csv";
 
-    /// <summary>Rows in the source file. Only used to show progress and "how
-    /// much am I about to pull" before the first import.</summary>
-    public long CatalogSourceRows { get; set; } = 2_231_142;
+    /// <summary>
+    /// The small rich corpus: 32,722 AllRecipes dishes, 77% with a photo and all
+    /// with times and servings. The big feed has none of that, which made
+    /// choosing between three identically-named results impossible. Imported
+    /// alongside rather than instead — search ranks pictured dishes first and
+    /// falls through to the long tail.
+    /// </summary>
+    public string CatalogRichUrl { get; set; } =
+        "https://huggingface.co/datasets/Shengtao/recipe/resolve/main/recipe.csv";
+
+    /// <summary>Rows across both feeds. Only used to show progress and "how much
+    /// am I about to pull" before the first import.</summary>
+    public long CatalogSourceRows { get; set; } = 2_263_864;
 
     /// <summary>Stop after this many usable recipes. 0 takes the lot; a smaller
     /// number is handy on a home server that does not want the full 2GB.</summary>

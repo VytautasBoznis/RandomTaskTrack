@@ -71,6 +71,7 @@ Jenkinsfile   build → push → deploy
 | GET | `/api/recipes/search?query=` | ask the source by name — saves nothing |
 | POST | `/api/recipes/library` | bank the search results worth keeping |
 | POST | `/api/recipes/pick` | cook a named library dish this week |
+| DELETE | `/api/recipes/pick` | clear the week's dish without picking another |
 | GET | `/api/recipes/history` | the cookbook — filter by `search`, `tags`, `cooked` |
 | PUT | `/api/recipes/{id}` | rating, notes, tags |
 | GET | `/api/recipes/catalog` | bulk catalog status — loaded, running, progress |
@@ -120,6 +121,16 @@ measured on the live API, `ramen` is 5 dishes, `sushi` 3, `pad thai` and
 The same searches against `tracker.recipe_catalog` return 1,061, 996, 490 and
 93. Search falls back to the API when the catalog is empty, so the tab works
 before anyone presses Load.
+
+The catalog is **two** feeds, because one could not do the job alone. RecipeNLG
+(2.2M) has the breadth but stores nothing except title, ingredients and method —
+so a search for "chicken ramen" returned three dishes all called "Chicken Ramen"
+with no photo, no timing and no way to choose between them. AllRecipes (32,722,
+77% with a photo, all with times and servings) has the opposite problem: lovely
+cards, thin coverage. Both are imported and search sorts `image_url IS NULL`
+last, so pictured dishes come first and the long tail is still there underneath.
+`feed` on each row is what lets "check for new" add the second corpus without
+re-downloading the first.
 
 The catalog is opt-in and loads from the Recipes tab — 2.2M recipes, ~2GB,
 streamed straight into Postgres by `RecipeCatalogImporter` with no key and no

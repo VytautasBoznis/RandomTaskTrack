@@ -54,14 +54,30 @@ public class CatalogRecipeSource : IRecipeSource
 
         var rows = await unitOfWork.Connection.QueryAsync<CatalogRow>(
             // plainto_tsquery ANDs the words, so "chicken ramen" means both.
-            // Shortest title first is a cheap relevance stand-in: "Chicken
-            // Ramen" beats "Chicken Ramen Salad With Almonds", and it costs
-            // nothing next to ts_rank over two million rows.
+            //
+            // Three tiebreakers, in the order they matter when choosing dinner.
+            //
+            // Pictured first: both corpora are in here and only the small one
+            // has photos, so otherwise the 2.2M text-only entries bury the 32k
+            // you can actually look at.
+            //
+            // Then readable: the big corpus was scraped line by line, so some of
+            // its methods come out shredded — ["Cook chicken, debone and cut
+            // into small pieces (reserve 1/2 cup", "liquid).", "Cook",
+            // "noodles; drain"]. Mean step length separates those from prose
+            // without needing to parse anything, and 30 characters is comfortably
+            // below a real instruction and above a fragment.
+            //
+            // Then shortest title, a cheap relevance stand-in: "Chicken Ramen"
+            // beats "Chicken Ramen Salad With Almonds" and costs nothing next to
+            // ts_rank over two million rows.
             @"SELECT external_id, title, ingredients::text AS ingredients,
-                     steps::text AS steps, link
+                     steps::text AS steps, link, image_url, ready_minutes, servings
               FROM tracker.recipe_catalog
               WHERE to_tsvector('english', title) @@ plainto_tsquery('english', @query)
-              ORDER BY length(title)
+              ORDER BY (image_url IS NULL),
+                       (length(steps::text) / greatest(jsonb_array_length(steps), 1)) < 30,
+                       length(title)
               LIMIT @number",
             new { query, number });
 
@@ -70,7 +86,10 @@ public class CatalogRecipeSource : IRecipeSource
             Source = Name,
             ExternalId = row.ExternalId,
             Title = row.Title,
+            ImageUrl = row.ImageUrl,
             SourceUrl = Absolute(row.Link),
+            ReadyMinutes = row.ReadyMinutes,
+            Servings = row.Servings,
             Ingredients = RecipeMapper.Deserialize<RecipeIngredient>(row.Ingredients),
             Steps = RecipeMapper.Deserialize<string>(row.Steps)
         }).ToList();
@@ -89,5 +108,8 @@ public class CatalogRecipeSource : IRecipeSource
         public string Ingredients { get; set; } = "[]";
         public string Steps { get; set; } = "[]";
         public string? Link { get; set; }
+        public string? ImageUrl { get; set; }
+        public int? ReadyMinutes { get; set; }
+        public int? Servings { get; set; }
     }
 }

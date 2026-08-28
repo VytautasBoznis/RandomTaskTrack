@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { saveRecipes, searchRecipes, setWeeklyDish } from '../api';
+import { clearWeeklyDish, saveRecipes, searchRecipes, setWeeklyDish } from '../api';
 import { useApiError } from '../hooks';
 import RecipeCatalog from './RecipeCatalog';
 import type { RecipeCandidate, RecipeHistoryItem } from '../types';
@@ -18,6 +18,8 @@ export default function RecipeSearch({ onUnauthorized }: { onUnauthorized: () =>
   // Which saved dish is now this week's — separate from `busy`, so changing
   // your mind and cooking a different one instead still works.
   const [cooked, setCooked] = useState<string | null>(null);
+  // Which result is expanded to its full ingredients and method.
+  const [open, setOpen] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function search(e: React.FormEvent) {
@@ -78,6 +80,20 @@ export default function RecipeSearch({ onUnauthorized }: { onUnauthorized: () =>
     }
   }
 
+  async function undo() {
+    setBusy(true);
+    setError(null);
+
+    try {
+      await clearWeeklyDish();
+      setCooked(null);
+    } catch (e) {
+      fail(e);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   // An import that has just finished changes what a search would return, so
   // clear the old results rather than leaving stale ones on screen.
   const onCatalogLoaded = useCallback(() => {
@@ -117,7 +133,12 @@ export default function RecipeSearch({ onUnauthorized }: { onUnauthorized: () =>
 
                 <span className="actions">
                   {cooked === recipe.recipeId ? (
-                    <span className="notes">This week's dish — see the This week tab.</span>
+                    <>
+                      <span className="notes">Now this week's dish.</span>
+                      <button type="button" className="link" disabled={busy} onClick={undo}>
+                        Undo
+                      </button>
+                    </>
                   ) : (
                     <button type="button" className="link" disabled={busy} onClick={() => cook(recipe.recipeId)}>
                       Cook this week
@@ -161,11 +182,67 @@ export default function RecipeSearch({ onUnauthorized }: { onUnauthorized: () =>
                 <span className="title">{candidate.title}</span>
               </label>
 
+              {/* Joined rather than concatenated: catalog dishes have no time
+                  or servings, and the old version left a dangling "·". */}
               <p className="notes">
-                {candidate.readyMinutes !== null && `${candidate.readyMinutes} min`}
-                {candidate.servings !== null && ` · serves ${candidate.servings}`}
-                {` · ${candidate.ingredients.length} ingredients · ${candidate.steps.length} steps`}
+                {[
+                  candidate.readyMinutes !== null ? `${candidate.readyMinutes} min` : null,
+                  candidate.servings !== null ? `serves ${candidate.servings}` : null,
+                  `${candidate.ingredients.length} ingredients`,
+                  `${candidate.steps.length} steps`,
+                ]
+                  .filter((part) => part !== null)
+                  .join(' · ')}
               </p>
+
+              {/* The whole point of this line: the corpus has three dishes all
+                  called "Chicken Ramen", and the ingredients are the only thing
+                  that tells them apart. */}
+              {candidate.ingredients.length > 0 && (
+                <p className="ingredient-peek">
+                  {candidate.ingredients
+                    .slice(0, 6)
+                    .map((i) => i.item)
+                    .join(', ')}
+                  {candidate.ingredients.length > 6 && ` … +${candidate.ingredients.length - 6} more`}
+                </p>
+              )}
+
+              <button
+                type="button"
+                className="link"
+                onClick={() => setOpen(open === candidate.externalId ? null : candidate.externalId)}
+              >
+                {open === candidate.externalId ? 'Hide recipe' : 'Read it'}
+              </button>
+
+              {open === candidate.externalId && (
+                <div className="buckets">
+                  <section className="card">
+                    <h2>
+                      Ingredients <span className="count">{candidate.ingredients.length}</span>
+                    </h2>
+                    <ul>
+                      {candidate.ingredients.map((ingredient, index) => (
+                        <li key={index}>
+                          <span className="title">{ingredient.item}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+
+                  <section className="card">
+                    <h2>
+                      Method <span className="count">{candidate.steps.length}</span>
+                    </h2>
+                    <ol className="steps">
+                      {candidate.steps.map((step, index) => (
+                        <li key={index}>{step}</li>
+                      ))}
+                    </ol>
+                  </section>
+                </div>
+              )}
 
               {candidate.imageUrl && <img className="dish-image" src={candidate.imageUrl} alt="" />}
             </section>

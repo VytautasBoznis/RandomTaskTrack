@@ -102,6 +102,14 @@ public class RecipesRepository : IRecipesRepository
             unitOfWork.Transaction);
     }
 
+    public async Task<bool> HasAnyPickAsync(DateOnly weekOf, IUnitOfWork unitOfWork)
+    {
+        return await unitOfWork.Connection.ExecuteScalarAsync<bool>(
+            "SELECT EXISTS (SELECT 1 FROM tracker.recipe_picks WHERE week_of = @weekOf)",
+            new { weekOf },
+            unitOfWork.Transaction);
+    }
+
     public async Task<RecipePick?> GetPickAsync(Guid id, IUnitOfWork unitOfWork)
     {
         return await unitOfWork.Connection.QueryFirstOrDefaultAsync<RecipePick>(

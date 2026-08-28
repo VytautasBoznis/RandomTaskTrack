@@ -15,6 +15,13 @@ public interface IRecipesRepository
 
     Task<RecipePick?> GetCurrentPickAsync(DateOnly weekOf, IUnitOfWork unitOfWork);
 
+    /// <summary>
+    /// Whether the week has ever had a dish, superseded ones included. The
+    /// difference between "nobody has opened the tab this week" and "a dish was
+    /// deliberately cleared" — only the first should be filled automatically.
+    /// </summary>
+    Task<bool> HasAnyPickAsync(DateOnly weekOf, IUnitOfWork unitOfWork);
+
     Task<RecipePick?> GetPickAsync(Guid id, IUnitOfWork unitOfWork);
 
     Task<Recipe?> GetRecipeAsync(Guid id, IUnitOfWork unitOfWork);

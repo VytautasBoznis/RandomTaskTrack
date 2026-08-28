@@ -224,6 +224,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IValidator<GetRecipeHistoryRequest>, GetRecipeHistoryRequestValidator>();
         services.AddSingleton<IValidator<GetCatalogStatusRequest>, GetCatalogStatusRequestValidator>();
         services.AddSingleton<IValidator<StartCatalogImportRequest>, StartCatalogImportRequestValidator>();
+        services.AddSingleton<IValidator<ClearWeeklyDishRequest>, ClearWeeklyDishRequestValidator>();
 
         // Notes
         services.AddSingleton<IValidator<GetNotesRequest>, GetNotesRequestValidator>();
@@ -278,6 +279,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<GetRecipeHistoryOperation>();
         services.AddScoped<GetCatalogStatusOperation>();
         services.AddScoped<StartCatalogImportOperation>();
+        services.AddScoped<ClearWeeklyDishOperation>();
 
         // Notes
         services.AddScoped<GetNotesOperation>();

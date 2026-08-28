@@ -46,8 +46,21 @@ public class GetWeeklyDishOperation : BaseOperation<GetWeeklyDishRequest, GetWee
 
         List<RecipeFamily> families = await _recipesRepository.GetFamiliesAsync(unitOfWork);
 
-        RecipePick pick = await _recipesRepository.GetCurrentPickAsync(weekOf, unitOfWork)
-                          ?? await _picker.PickAsync(weekOf, null, unitOfWork, CancellationToken.None);
+        RecipePick? pick = await _recipesRepository.GetCurrentPickAsync(weekOf, unitOfWork);
+
+        // Only fill a week nobody has touched. Once it has had a dish, an empty
+        // week means one was cleared on purpose, and re-picking would make that
+        // button do nothing — worse, it would spend a source call to undo the
+        // user's own decision.
+        if (pick is null && !await _recipesRepository.HasAnyPickAsync(weekOf, unitOfWork))
+        {
+            pick = await _picker.PickAsync(weekOf, null, unitOfWork, CancellationToken.None);
+        }
+
+        if (pick is null)
+        {
+            return new GetWeeklyDishResponse { Dish = null, Families = families };
+        }
 
         Recipe recipe = await _recipesRepository.GetRecipeAsync(pick.RecipeId, unitOfWork)
                         ?? throw new NotFoundException("The picked dish is missing.", ExceptionCodes.RECIPE_PICK_NOT_FOUND);
