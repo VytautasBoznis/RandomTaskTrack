@@ -32,9 +32,10 @@ is just checkboxes.
   `NullAiProvider` is registered when no API key is set so the app still boots.
 - **Recipes** — same shape behind `IRecipeSource`: Spoonacular adapter ships,
   `NullRecipeSource` when `Recipes:ApiKey` is empty.
-- **Frontend** — React + TypeScript, no router: `App.tsx` switches five tabs
-  (Today / Recurring / Recipes / Log / Chat) and each remounts on switch so it
-  re-reads.
+- **Frontend** — React + TypeScript, no router: `App.tsx` switches six tabs
+  (Today / Recurring / Recipes / Notes / Log / Chat) and each remounts on switch
+  so it re-reads. Note bodies are markdown, rendered with `react-markdown` +
+  `remark-gfm` (raw HTML left disabled, so no sanitizer).
 
 ## Layout
 
@@ -61,6 +62,7 @@ docker-compose.yml     db → migrate (one-shot yuniql) → api
 | `recipe_families` | Cuisine families, in the source's own vocabulary. The weekly pick rotates to whichever has gone longest unused. |
 | `recipe_recipes` | Every dish ever pulled. Doubles as the "already cooked" list. |
 | `recipe_picks` | One dish per ISO week. Partial unique index on `(week_of) WHERE status = 1`. |
+| `note_notes` | Free-form markdown, attached to nothing — no domain, no schedule, no completion. |
 
 Domain-specific payloads live in `jsonb` `data` columns (sets/reps/weight, water
 ml, recipe id) rather than in per-domain tables.
@@ -69,7 +71,7 @@ ml, recipe id) rather than in per-domain tables.
 
 `/api/auth` (login, register, change-password) · `/api/domains` ·
 `/api/tasks` (+ `/dashboard`, `/completions`, `/{id}/complete`) ·
-`/api/recurrences` · `/api/recipes` (weekly, reroll, task) ·
+`/api/recurrences` · `/api/recipes` (weekly, reroll, task) · `/api/notes` ·
 `/api/chat` (conversations, messages) · `/health`
 
 ## Not built yet

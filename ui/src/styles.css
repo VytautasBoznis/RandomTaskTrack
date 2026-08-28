@@ -326,6 +326,141 @@ label.checkbox input {
   padding: 6px 0;
 }
 
+.note-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.note h2 {
+  color: var(--text);
+  font-size: 18px;
+  margin: 0;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* Wider than the task form: a markdown body is written, not filled in. */
+.note-form {
+  max-width: 720px;
+}
+
+/* Rendered markdown. The global ul/li rules are built for task rows, so a note
+   body has to be handed its defaults back. */
+.markdown > :first-child {
+  margin-top: 0;
+}
+
+.markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.markdown h1,
+.markdown h2,
+.markdown h3,
+.markdown h4 {
+  color: var(--text);
+  font-size: 16px;
+  letter-spacing: 0;
+  margin: 16px 0 8px;
+  text-transform: none;
+}
+
+.markdown h1 {
+  font-size: 20px;
+}
+
+.markdown h2 {
+  font-size: 18px;
+}
+
+.markdown ul {
+  list-style: disc;
+}
+
+.markdown ol {
+  list-style: decimal;
+}
+
+.markdown ul,
+.markdown ol {
+  margin: 8px 0;
+  padding-left: 24px;
+}
+
+.markdown li {
+  border: none;
+  display: list-item;
+  padding: 2px 0;
+}
+
+/* GFM task lists: the bullet is redundant next to a checkbox. */
+.markdown li:has(> input[type='checkbox']) {
+  list-style: none;
+  margin-left: -20px;
+}
+
+.markdown input[type='checkbox'] {
+  height: 16px;
+  margin-right: 6px;
+  padding: 0;
+  width: 16px;
+}
+
+.markdown a {
+  color: var(--accent);
+}
+
+.markdown code {
+  background: var(--bg);
+  border-radius: 4px;
+  font-size: 14px;
+  padding: 2px 5px;
+}
+
+.markdown pre {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow-x: auto;
+  padding: 12px;
+}
+
+.markdown pre code {
+  background: none;
+  padding: 0;
+}
+
+.markdown blockquote {
+  border-left: 2px solid var(--line);
+  color: var(--muted);
+  margin: 8px 0;
+  padding-left: 12px;
+}
+
+.markdown table {
+  border-collapse: collapse;
+}
+
+.markdown th,
+.markdown td {
+  border: 1px solid var(--line);
+  padding: 6px 10px;
+  text-align: left;
+}
+
+.markdown img {
+  border-radius: 8px;
+  max-width: 100%;
+}
+
+.markdown hr {
+  border: none;
+  border-top: 1px solid var(--line);
+}
+
 .chat {
   display: grid;
   grid-template-columns: 240px 1fr;

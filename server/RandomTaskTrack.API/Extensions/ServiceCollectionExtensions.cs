@@ -7,6 +7,7 @@ using RandomTaskTrack.Business.Base;
 using RandomTaskTrack.Business.Operations.Auth;
 using RandomTaskTrack.Business.Operations.Chat;
 using RandomTaskTrack.Business.Operations.Domains;
+using RandomTaskTrack.Business.Operations.Notes;
 using RandomTaskTrack.Business.Operations.Recipes;
 using RandomTaskTrack.Business.Operations.Recurrences;
 using RandomTaskTrack.Business.Operations.Tasks;
@@ -14,6 +15,7 @@ using RandomTaskTrack.Business.Recipes.Sources;
 using RandomTaskTrack.Business.Repositories.Auth;
 using RandomTaskTrack.Business.Repositories.Chat;
 using RandomTaskTrack.Business.Repositories.Domains;
+using RandomTaskTrack.Business.Repositories.Notes;
 using RandomTaskTrack.Business.Repositories.Recipes;
 using RandomTaskTrack.Business.Repositories.Recurrences;
 using RandomTaskTrack.Business.Repositories.Tasks;
@@ -23,12 +25,14 @@ using RandomTaskTrack.Data.Models.Constants;
 using RandomTaskTrack.Data.Request.Auth;
 using RandomTaskTrack.Data.Request.Chat;
 using RandomTaskTrack.Data.Request.Domains;
+using RandomTaskTrack.Data.Request.Notes;
 using RandomTaskTrack.Data.Request.Recipes;
 using RandomTaskTrack.Data.Request.Recurrences;
 using RandomTaskTrack.Data.Request.Tasks;
 using RandomTaskTrack.Data.Validator.Auth;
 using RandomTaskTrack.Data.Validator.Chat;
 using RandomTaskTrack.Data.Validator.Domains;
+using RandomTaskTrack.Data.Validator.Notes;
 using RandomTaskTrack.Data.Validator.Recipes;
 using RandomTaskTrack.Data.Validator.Recurrences;
 using RandomTaskTrack.Data.Validator.Tasks;
@@ -38,6 +42,7 @@ using RandomTaskTrack.Interfaces.Recipes;
 using RandomTaskTrack.Interfaces.Repositories.Auth;
 using RandomTaskTrack.Interfaces.Repositories.Chat;
 using RandomTaskTrack.Interfaces.Repositories.Domains;
+using RandomTaskTrack.Interfaces.Repositories.Notes;
 using RandomTaskTrack.Interfaces.Repositories.Recipes;
 using RandomTaskTrack.Interfaces.Repositories.Recurrences;
 using RandomTaskTrack.Interfaces.Repositories.Tasks;
@@ -77,6 +82,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IRecurrencesRepository, RecurrencesRepository>();
         services.AddScoped<IChatRepository, ChatRepository>();
         services.AddScoped<IRecipesRepository, RecipesRepository>();
+        services.AddScoped<INotesRepository, NotesRepository>();
 
         return services;
     }
@@ -192,6 +198,12 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IValidator<RerollDishRequest>, RerollDishRequestValidator>();
         services.AddSingleton<IValidator<CreateDishTaskRequest>, CreateDishTaskRequestValidator>();
 
+        // Notes
+        services.AddSingleton<IValidator<GetNotesRequest>, GetNotesRequestValidator>();
+        services.AddSingleton<IValidator<CreateNoteRequest>, CreateNoteRequestValidator>();
+        services.AddSingleton<IValidator<UpdateNoteRequest>, UpdateNoteRequestValidator>();
+        services.AddSingleton<IValidator<DeleteNoteRequest>, DeleteNoteRequestValidator>();
+
         // Chat
         services.AddSingleton<IValidator<SendChatMessageRequest>, SendChatMessageRequestValidator>();
         services.AddSingleton<IValidator<GetConversationsRequest>, GetConversationsRequestValidator>();
@@ -232,6 +244,12 @@ public static class ServiceCollectionExtensions
         services.AddScoped<GetWeeklyDishOperation>();
         services.AddScoped<RerollDishOperation>();
         services.AddScoped<CreateDishTaskOperation>();
+
+        // Notes
+        services.AddScoped<GetNotesOperation>();
+        services.AddScoped<CreateNoteOperation>();
+        services.AddScoped<UpdateNoteOperation>();
+        services.AddScoped<DeleteNoteOperation>();
 
         // Chat
         services.AddScoped<SendChatMessageOperation>();

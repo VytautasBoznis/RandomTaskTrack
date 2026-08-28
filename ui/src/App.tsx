@@ -3,17 +3,19 @@ import Chat from './components/Chat';
 import CompletionLog from './components/CompletionLog';
 import Dashboard from './components/Dashboard';
 import Login from './components/Login';
+import Notes from './components/Notes';
 import Recipes from './components/Recipes';
 import Recurrences from './components/Recurrences';
 import Register from './components/Register';
 import { clearToken, getToken } from './api';
 
-type View = 'today' | 'recurrences' | 'recipes' | 'log' | 'chat';
+type View = 'today' | 'recurrences' | 'recipes' | 'notes' | 'log' | 'chat';
 
 const VIEWS: { id: View; label: string }[] = [
   { id: 'today', label: 'Today' },
   { id: 'recurrences', label: 'Recurring' },
   { id: 'recipes', label: 'Recipes' },
+  { id: 'notes', label: 'Notes' },
   { id: 'log', label: 'Log' },
   { id: 'chat', label: 'Chat' },
 ];
@@ -66,6 +68,7 @@ export default function App() {
           {view === 'today' && <Dashboard onUnauthorized={signOut} />}
           {view === 'recurrences' && <Recurrences onUnauthorized={signOut} />}
           {view === 'recipes' && <Recipes onUnauthorized={signOut} />}
+          {view === 'notes' && <Notes onUnauthorized={signOut} />}
           {view === 'log' && <CompletionLog onUnauthorized={signOut} />}
           {view === 'chat' && <Chat onUnauthorized={signOut} />}
         </>

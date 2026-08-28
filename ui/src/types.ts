@@ -152,6 +152,21 @@ export interface WeeklyDish {
   taskId: string | null;
 }
 
+export interface Note {
+  id: string;
+  title: string;
+  /** Markdown, rendered client-side. */
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Update reads null as "leave alone"; the form always sends both fields. */
+export interface NoteDraft {
+  title: string;
+  content: string;
+}
+
 export interface ConversationListItem {
   id: string;
   title: string;

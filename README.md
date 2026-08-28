@@ -66,6 +66,7 @@ Jenkinsfile   build → push → deploy
 | POST | `/api/tasks` · PUT `/api/tasks/{id}` · DELETE `/api/tasks/{id}` | |
 | POST | `/api/tasks/{id}/complete` | tick + log + chain the next occurrence |
 | GET/POST/PUT/DELETE | `/api/recurrences` | |
+| GET/POST/PUT/DELETE | `/api/notes` | markdown notes, newest edit first |
 | POST | `/api/chat/messages` | one agent turn |
 | GET | `/api/chat/conversations`, `/api/chat/conversations/{id}` | |
 

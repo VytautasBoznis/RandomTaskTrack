@@ -59,7 +59,10 @@
       "Bash(curl -s --max-time 20 \"https://www.themealdb.com/api/json/v1/1/filter.php?a=British\")",
       "Bash(curl -s --max-time 20 \"https://www.themealdb.com/api/json/v1/1/filter.php?a=American\")",
       "WebFetch(domain:spoonacular.com)",
-      "Bash(rm -rf /c/tmp/spoon-check)"
+      "Bash(rm -rf /c/tmp/spoon-check)",
+      "Bash(npm view *)",
+      "Bash(echo \"react-markdown: $\\(npm view react-markdown version 2>/dev/null\\)\")",
+      "Bash(echo \"remark-gfm: $\\(npm view remark-gfm version 2>/dev/null\\)\")"
     ]
   }
 }

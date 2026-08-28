@@ -4,6 +4,8 @@ import type {
   ConversationDetail,
   ConversationListItem,
   Dashboard,
+  Note,
+  NoteDraft,
   RecipeFamily,
   Recurrence,
   RecurrenceDraft,
@@ -152,6 +154,23 @@ export const createDishTask = (pickId: string, dueOn: string | null) =>
     method: 'POST',
     body: JSON.stringify({ pickId, dueOn }),
   });
+
+export const getNotes = async () => (await request<{ notes: Note[] }>('/notes')).notes;
+
+export const createNote = (draft: NoteDraft) =>
+  request<{ note: Note }>('/notes', {
+    method: 'POST',
+    body: JSON.stringify(draft),
+  });
+
+export const updateNote = (id: string, draft: NoteDraft) =>
+  request<{ note: Note }>(`/notes/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(draft),
+  });
+
+export const deleteNote = (id: string) =>
+  request<{ success: boolean }>(`/notes/${id}`, { method: 'DELETE' });
 
 export const getConversations = async () =>
   (await request<{ conversations: ConversationListItem[] }>('/chat/conversations')).conversations;
