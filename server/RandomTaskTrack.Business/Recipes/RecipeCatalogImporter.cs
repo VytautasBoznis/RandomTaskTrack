@@ -36,6 +36,10 @@ public class RecipeCatalogImporter : IRecipeCatalogImporter
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
+    /// <summary>Rows per COPY before the batch is promoted. Big enough that the
+    /// per-batch overhead is noise, small enough that a failure costs seconds.</summary>
+    private const int BatchSize = 50_000;
+
     private readonly IUnitOfWorkFactory _unitOfWorkFactory;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly RecipeOptions _options;
@@ -178,9 +182,17 @@ public class RecipeCatalogImporter : IRecipeCatalogImporter
         csv.ReadHeader();
 
         long written = 0;
+        long added = 0;
 
-        await using (var writer = await connection.BeginBinaryImportAsync(
-            "COPY catalog_staging (external_id, title, ingredients, steps, link) FROM STDIN (FORMAT BINARY)"))
+        // Flushed in batches rather than one enormous COPY. Ten minutes of
+        // streaming is long enough for a network blip, and losing all of it to a
+        // failure at ninety percent is miserable. Batching also makes a re-run
+        // resume for free — the ids are stable, so ON CONFLICT skips whatever
+        // already landed — and lets the tab's "loaded" count climb as it goes
+        // instead of sitting at zero until the very end.
+        NpgsqlBinaryImporter writer = await OpenAsync(connection);
+
+        try
         {
             while (await csv.ReadAsync())
             {
@@ -213,6 +225,21 @@ public class RecipeCatalogImporter : IRecipeCatalogImporter
 
                 written++;
 
+                if (written % BatchSize == 0)
+                {
+                    await writer.CompleteAsync();
+                    await writer.DisposeAsync();
+
+                    added += await PromoteAsync(connection);
+
+                    lock (_gate)
+                    {
+                        _rowsAdded = added;
+                    }
+
+                    writer = await OpenAsync(connection);
+                }
+
                 if (_options.CatalogMaxRows > 0 && written >= _options.CatalogMaxRows)
                 {
                     break;
@@ -221,7 +248,22 @@ public class RecipeCatalogImporter : IRecipeCatalogImporter
 
             await writer.CompleteAsync();
         }
+        finally
+        {
+            await writer.DisposeAsync();
+        }
 
+        return added + await PromoteAsync(connection);
+    }
+
+    private static Task<NpgsqlBinaryImporter> OpenAsync(NpgsqlConnection connection) =>
+        connection.BeginBinaryImportAsync(
+            "COPY catalog_staging (external_id, title, ingredients, steps, link) FROM STDIN (FORMAT BINARY)");
+
+    /// <summary>Staging into the catalog, one row per external_id, then empties
+    /// staging so the next batch starts clean.</summary>
+    private static async Task<long> PromoteAsync(NpgsqlConnection connection)
+    {
         await using var promote = new NpgsqlCommand(
             @"INSERT INTO tracker.recipe_catalog (external_id, title, ingredients, steps, link)
               SELECT DISTINCT ON (external_id) external_id, title, ingredients, steps, link
@@ -229,16 +271,21 @@ public class RecipeCatalogImporter : IRecipeCatalogImporter
               ON CONFLICT (external_id) DO NOTHING",
             connection);
 
-        // Two million rows through a gin index takes as long as it takes, and
-        // timing out at the last step would waste the whole download.
+        // A batch through a gin index takes as long as it takes, and timing out
+        // would throw away work that has already been downloaded and parsed.
         promote.CommandTimeout = 0;
 
-        return await promote.ExecuteNonQueryAsync();
+        int added = await promote.ExecuteNonQueryAsync();
+
+        await using var clear = new NpgsqlCommand("TRUNCATE catalog_staging", connection);
+        await clear.ExecuteNonQueryAsync();
+
+        return added;
     }
 
     private static CatalogRow? Parse(CsvReader csv)
     {
-        string title = (csv.TryGetField("title", out string? t) ? t : null)?.Trim() ?? "";
+        string title = Clean(csv.TryGetField("title", out string? t) ? t : null);
 
         if (title.Length == 0)
         {
@@ -262,7 +309,7 @@ public class RecipeCatalogImporter : IRecipeCatalogImporter
             return null;
         }
 
-        string? link = (csv.TryGetField("link", out string? l) ? l : null)?.Trim();
+        string link = Clean(csv.TryGetField("link", out string? l) ? l : null);
 
         return new CatalogRow
         {
@@ -273,8 +320,54 @@ public class RecipeCatalogImporter : IRecipeCatalogImporter
             // is nothing to split out.
             Ingredients = JsonSerializer.Serialize(ingredients.Select(item => new { item, amount = (string?)null }), Json),
             Steps = JsonSerializer.Serialize(steps, Json),
-            Link = string.IsNullOrWhiteSpace(link) ? null : link
+            Link = link.Length == 0 ? null : link
         };
+    }
+
+    /// <summary>
+    /// Postgres will not take a NUL in a text column ("invalid byte sequence
+    /// for encoding UTF8: 0x00") and will not take   inside jsonb
+    /// ("unsupported Unicode escape sequence"), and a two million row web scrape
+    /// reliably contains both, along with the occasional half of a surrogate
+    /// pair. There is no skipping a row once a binary COPY is in flight — one
+    /// bad character aborts the entire stream — so they come out here instead.
+    ///
+    /// Tabs and newlines are kept: they are ordinary punctuation in a method.
+    /// </summary>
+    private static string Clean(string? value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return "";
+        }
+
+        var clean = new StringBuilder(value.Length);
+
+        for (int i = 0; i < value.Length; i++)
+        {
+            char c = value[i];
+
+            if (char.IsHighSurrogate(c))
+            {
+                // Only whole pairs survive; half of one is not encodable UTF-8.
+                if (i + 1 < value.Length && char.IsLowSurrogate(value[i + 1]))
+                {
+                    clean.Append(c).Append(value[i + 1]);
+                    i++;
+                }
+
+                continue;
+            }
+
+            if (char.IsLowSurrogate(c) || (char.IsControl(c) && c is not ('\t' or '\n' or '\r')))
+            {
+                continue;
+            }
+
+            clean.Append(c);
+        }
+
+        return clean.ToString().Trim();
     }
 
     private static List<string> ReadJsonArray(CsvReader csv, string field)
@@ -287,7 +380,7 @@ public class RecipeCatalogImporter : IRecipeCatalogImporter
         try
         {
             return JsonSerializer.Deserialize<List<string>>(raw!, Json)?
-                       .Select(value => value.Trim())
+                       .Select(Clean)
                        .Where(value => value.Length > 0)
                        .ToList()
                    ?? new List<string>();

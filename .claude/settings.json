@@ -92,7 +92,8 @@
       "Bash(export Jwt__ExpiryInMinutes=60)",
       "Bash(pkill -f \"RandomTaskTrack.API\")",
       "Bash(taskkill //F //IM RandomTaskTrack.API.exe)",
-      "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\)['dish']; print\\(f\\\\\"  weekly dish: {d['title']} | steps={len\\(d['steps']\\)} ingredients={len\\(d['ingredients']\\)} week={d['weekOf']}\\\\\"\\)\")"
+      "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\)['dish']; print\\(f\\\\\"  weekly dish: {d['title']} | steps={len\\(d['steps']\\)} ingredients={len\\(d['ingredients']\\)} week={d['weekOf']}\\\\\"\\)\")",
+      "Bash(export Database__ConnectionString=\"Host=localhost;Port=55434;Database=rtt;Username=postgres;Password=pw;SSL Mode=Disable\")"
     ]
   }
 }

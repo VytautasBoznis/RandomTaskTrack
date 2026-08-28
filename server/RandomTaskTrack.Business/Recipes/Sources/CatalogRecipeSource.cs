@@ -33,6 +33,19 @@ public class CatalogRecipeSource : IRecipeSource
             ExceptionCodes.RECIPE_SOURCE_NOT_CONFIGURED,
             "It has no cuisine labels. The weekly rotation needs an API source — set Recipes:ApiKey.");
 
+    /// <summary>
+    /// Whether anything has been imported. The difference between "nobody has
+    /// pressed Load" and "loaded, and this dish genuinely is not in it" — which
+    /// look identical from an empty result and want opposite handling.
+    /// </summary>
+    public async Task<bool> HasAnyAsync(CancellationToken cancellationToken)
+    {
+        await using IUnitOfWork unitOfWork = await _unitOfWorkFactory.CreateAsync();
+
+        return await unitOfWork.Connection.ExecuteScalarAsync<bool>(
+            "SELECT EXISTS (SELECT 1 FROM tracker.recipe_catalog)");
+    }
+
     public async Task<List<SourceRecipe>> SearchAsync(string query, int number, CancellationToken cancellationToken)
     {
         // Its own connection rather than the caller's: search is read-only and

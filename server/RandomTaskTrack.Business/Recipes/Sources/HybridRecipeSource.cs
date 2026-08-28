@@ -16,19 +16,21 @@ namespace RandomTaskTrack.Business.Recipes.Sources;
 /// and you are choosing by hand anyway — searching "chicken ramen" returns 1
 /// dish from Spoonacular and 43 from the catalog.
 ///
-/// If the catalog has not been imported it has nothing to say, so search falls
-/// back to the API rather than returning an empty list to someone who has never
-/// pressed the button.
+/// The fallback is only for an *empty* catalog — someone who has never pressed
+/// Load. A loaded catalog that simply has no match returns nothing, on purpose:
+/// falling back on every miss would spend a metered API call each time, and
+/// would turn "no such dish" into a quota error the moment the daily allowance
+/// ran out.
 /// </summary>
 public class HybridRecipeSource : IRecipeSource
 {
     private readonly IRecipeSource _rotation;
-    private readonly IRecipeSource _catalog;
+    private readonly CatalogRecipeSource _catalog;
     private readonly ILogger<HybridRecipeSource> _logger;
 
     public string Name => RecipeSourceNames.Hybrid;
 
-    public HybridRecipeSource(IRecipeSource rotation, IRecipeSource catalog, ILogger<HybridRecipeSource> logger)
+    public HybridRecipeSource(IRecipeSource rotation, CatalogRecipeSource catalog, ILogger<HybridRecipeSource> logger)
     {
         _rotation = rotation;
         _catalog = catalog;
@@ -42,12 +44,12 @@ public class HybridRecipeSource : IRecipeSource
     {
         List<SourceRecipe> local = await _catalog.SearchAsync(query, number, cancellationToken);
 
-        if (local.Count > 0)
+        if (local.Count > 0 || await _catalog.HasAnyAsync(cancellationToken))
         {
             return local;
         }
 
-        _logger.LogInformation("Catalog had nothing for {Query}; falling back to {Source}", query, _rotation.Name);
+        _logger.LogInformation("Catalog is empty; searching {Source} for {Query}", _rotation.Name, query);
 
         return await _rotation.SearchAsync(query, number, cancellationToken);
     }
