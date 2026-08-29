@@ -264,6 +264,14 @@ button.ghost {
   color: var(--text);
 }
 
+/* Ghost, but readable as the destructive one — it sits next to Reroll, and the
+   two must not be a coin flip. */
+button.danger {
+  background: none;
+  border: 1px solid var(--error);
+  color: var(--error);
+}
+
 .paused {
   opacity: 0.6;
 }

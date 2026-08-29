@@ -43,6 +43,20 @@ export default function RecipeWeekly({ onUnauthorized }: { onUnauthorized: () =>
   }, [fail, show]);
 
   async function clear() {
+    if (dish === null) {
+      return;
+    }
+
+    // It bins the cooking task too, so it gets the same confirm every other
+    // delete in the app gets.
+    const warning = dish.taskId === null
+      ? `Cancel "${dish.title}" for this week?`
+      : `Cancel "${dish.title}" for this week and take it off the board?`;
+
+    if (!window.confirm(warning)) {
+      return;
+    }
+
     setBusy(true);
     setError(null);
 
@@ -184,6 +198,13 @@ export default function RecipeWeekly({ onUnauthorized }: { onUnauthorized: () =>
           <button type="button" className="ghost" disabled={busy} onClick={reroll}>
             {busy ? 'Rolling…' : 'Reroll'}
           </button>
+
+          {/* Next to Reroll rather than buried in the card: the two ways off a
+              dish you did not want belong together, and this one has to be
+              findable without scrolling past the recipe to reach it. */}
+          <button type="button" className="danger" disabled={busy} onClick={clear}>
+            Cancel dish
+          </button>
         </span>
       </div>
 
@@ -212,12 +233,6 @@ export default function RecipeWeekly({ onUnauthorized }: { onUnauthorized: () =>
               Original recipe ↗
             </a>
           )}
-
-          {/* The way off the board that does not need the rotation. Reroll
-              replaces the dish and costs a source call; this just clears it. */}
-          <button type="button" className="link" disabled={busy} onClick={clear}>
-            Not cooking this
-          </button>
         </div>
 
         {/* Keyed on the recipe so a reroll resets the editor rather than
