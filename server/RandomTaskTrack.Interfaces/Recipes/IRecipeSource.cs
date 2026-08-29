@@ -19,5 +19,7 @@ public interface IRecipeSource
     Task<List<SourceRecipe>> PullAsync(string cuisine, CancellationToken cancellationToken);
 
     /// <summary>Free-text search, for overriding the cuisine rotation outright.</summary>
-    Task<List<SourceRecipe>> SearchAsync(string query, int number, CancellationToken cancellationToken);
+    /// <param name="offset">How many matches to skip. The catalog answers
+    /// "ramen" with a thousand dishes, and one page of ten is not a choice.</param>
+    Task<List<SourceRecipe>> SearchAsync(string query, int number, int offset, CancellationToken cancellationToken);
 }

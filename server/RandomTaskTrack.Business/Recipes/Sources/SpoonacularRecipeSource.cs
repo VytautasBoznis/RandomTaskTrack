@@ -65,11 +65,12 @@ public partial class SpoonacularRecipeSource : IRecipeSource
     /// perfectly good analyzed steps. Casting the wide net and judging the real
     /// payload is the only reliable order.
     /// </summary>
-    public async Task<List<SourceRecipe>> SearchAsync(string query, int number, CancellationToken cancellationToken)
+    public async Task<List<SourceRecipe>> SearchAsync(string query, int number, int offset, CancellationToken cancellationToken)
     {
         string searchUrl = $"{_options.BaseUrl.TrimEnd('/')}/recipes/complexSearch" +
                            $"?query={Uri.EscapeDataString(query)}" +
-                           $"&number={number}";
+                           $"&number={number}" +
+                           $"&offset={offset}";
 
         List<string> ids = await GetIdsAsync(searchUrl, $"query {query}", cancellationToken);
 

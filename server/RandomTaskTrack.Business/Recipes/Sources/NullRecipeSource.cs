@@ -16,7 +16,7 @@ public class NullRecipeSource : IRecipeSource
 
     public Task<List<SourceRecipe>> PullAsync(string cuisine, CancellationToken cancellationToken) => throw NotConfigured();
 
-    public Task<List<SourceRecipe>> SearchAsync(string query, int number, CancellationToken cancellationToken) => throw NotConfigured();
+    public Task<List<SourceRecipe>> SearchAsync(string query, int number, int offset, CancellationToken cancellationToken) => throw NotConfigured();
 
     private static RecipeSourceException NotConfigured() => new(
         "No recipe source is configured.",

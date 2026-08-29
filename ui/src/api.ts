@@ -172,9 +172,13 @@ export const startCatalogImport = () =>
   request<{ started: boolean; status: CatalogStatus }>('/recipes/catalog/import', { method: 'POST' });
 
 // Reads only — nothing is stored until saveRecipes sends the chosen ones back.
-export const searchRecipes = async (query: string) =>
-  (await request<{ candidates: RecipeCandidate[] }>(`/recipes/search?query=${encodeURIComponent(query)}`))
-    .candidates;
+// Returns the envelope rather than the list: the catalog answers "ramen" with a
+// thousand dishes, so the caller needs hasMore and the page size to step
+// through them.
+export const searchRecipes = (query: string, offset: number) =>
+  request<{ candidates: RecipeCandidate[]; hasMore: boolean; pageSize: number }>(
+    `/recipes/search?query=${encodeURIComponent(query)}&offset=${offset}`,
+  );
 
 export const saveRecipes = async (recipes: RecipeCandidate[]) =>
   (

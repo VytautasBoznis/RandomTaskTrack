@@ -47,12 +47,13 @@ public class RecipesController : BaseController
 
     /// <summary>Free-text search against the source. Saves nothing.</summary>
     [HttpGet("search")]
-    public async Task<IActionResult> Search([FromQuery] string query, [FromQuery] int? number)
+    public async Task<IActionResult> Search([FromQuery] string query, [FromQuery] int? number, [FromQuery] int? offset)
     {
         var request = new SearchRecipesRequest
         {
             Query = query ?? "",
             Number = number,
+            Offset = offset ?? 0,
             SessionUserData = GetSessionModelFromJwt()
         };
 

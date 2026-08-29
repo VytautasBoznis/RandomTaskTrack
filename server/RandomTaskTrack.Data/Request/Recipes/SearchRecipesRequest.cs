@@ -13,4 +13,7 @@ public class SearchRecipesRequest : AuthenticatedRequest
 
     /// <summary>How many to show. Null takes the source's default page.</summary>
     public int? Number { get; set; }
+
+    /// <summary>How many matches to skip — page number times page size.</summary>
+    public int Offset { get; set; }
 }

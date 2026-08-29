@@ -46,7 +46,7 @@ public class CatalogRecipeSource : IRecipeSource
             "SELECT EXISTS (SELECT 1 FROM tracker.recipe_catalog)");
     }
 
-    public async Task<List<SourceRecipe>> SearchAsync(string query, int number, CancellationToken cancellationToken)
+    public async Task<List<SourceRecipe>> SearchAsync(string query, int number, int offset, CancellationToken cancellationToken)
     {
         // Its own connection rather than the caller's: search is read-only and
         // has no business joining whatever transaction the request is running.
@@ -71,15 +71,22 @@ public class CatalogRecipeSource : IRecipeSource
             // Then shortest title, a cheap relevance stand-in: "Chicken Ramen"
             // beats "Chicken Ramen Salad With Almonds" and costs nothing next to
             // ts_rank over two million rows.
+            //
+            // external_id last breaks the remaining ties. Nothing to do with
+            // relevance — three keys leave thousands of rows equal, and OFFSET
+            // over an order that is only partial lets Postgres return a row on
+            // page 2 that it already returned on page 1, and skip others
+            // entirely. A total order is what makes paging honest.
             @"SELECT external_id, title, ingredients::text AS ingredients,
                      steps::text AS steps, link, image_url, ready_minutes, servings
               FROM tracker.recipe_catalog
               WHERE to_tsvector('english', title) @@ plainto_tsquery('english', @query)
               ORDER BY (image_url IS NULL),
                        (length(steps::text) / greatest(jsonb_array_length(steps), 1)) < 30,
-                       length(title)
-              LIMIT @number",
-            new { query, number });
+                       length(title),
+                       external_id
+              LIMIT @number OFFSET @offset",
+            new { query, number, offset });
 
         return rows.Select(row => new SourceRecipe
         {

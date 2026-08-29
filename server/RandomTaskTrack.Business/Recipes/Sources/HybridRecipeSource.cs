@@ -40,9 +40,9 @@ public class HybridRecipeSource : IRecipeSource
     public Task<List<SourceRecipe>> PullAsync(string cuisine, CancellationToken cancellationToken) =>
         _rotation.PullAsync(cuisine, cancellationToken);
 
-    public async Task<List<SourceRecipe>> SearchAsync(string query, int number, CancellationToken cancellationToken)
+    public async Task<List<SourceRecipe>> SearchAsync(string query, int number, int offset, CancellationToken cancellationToken)
     {
-        List<SourceRecipe> local = await _catalog.SearchAsync(query, number, cancellationToken);
+        List<SourceRecipe> local = await _catalog.SearchAsync(query, number, offset, cancellationToken);
 
         if (local.Count > 0 || await _catalog.HasAnyAsync(cancellationToken))
         {
@@ -51,6 +51,6 @@ public class HybridRecipeSource : IRecipeSource
 
         _logger.LogInformation("Catalog is empty; searching {Source} for {Query}", _rotation.Name, query);
 
-        return await _rotation.SearchAsync(query, number, cancellationToken);
+        return await _rotation.SearchAsync(query, number, offset, cancellationToken);
     }
 }

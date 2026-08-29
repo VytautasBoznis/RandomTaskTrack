@@ -11,5 +11,7 @@ public class SearchRecipesRequestValidator : AbstractValidator<SearchRecipesRequ
 
         // Upper bound because every result costs source quota.
         RuleFor(x => x.Number).InclusiveBetween(1, 25).When(x => x.Number.HasValue);
+
+        RuleFor(x => x.Offset).GreaterThanOrEqualTo(0);
     }
 }

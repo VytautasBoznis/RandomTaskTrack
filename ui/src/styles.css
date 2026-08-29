@@ -659,6 +659,19 @@ nav.sub button.tab {
   opacity: 0.85;
 }
 
+/* The whole summary opens the dish, so it carries the pointer the "Read it"
+   link used to. */
+.candidate-head {
+  cursor: pointer;
+}
+
+.candidate-title {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
 .catalog h2 {
   color: var(--text);
   font-size: 15px;

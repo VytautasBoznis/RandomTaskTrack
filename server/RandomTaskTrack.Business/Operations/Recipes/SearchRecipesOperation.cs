@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using RandomTaskTrack.Business.Base;
 using RandomTaskTrack.Data.Models.ConfigurationOptions;
+using RandomTaskTrack.Data.Models.Recipes;
 using RandomTaskTrack.Data.Request.Recipes;
 using RandomTaskTrack.Data.Response.Recipes;
 using RandomTaskTrack.Interfaces.Base;
@@ -34,12 +35,25 @@ public class SearchRecipesOperation : BaseOperation<SearchRecipesRequest, Search
 
     protected override async Task<SearchRecipesResponse> Execute(SearchRecipesRequest request, IUnitOfWork unitOfWork)
     {
+        int pageSize = request.Number ?? _options.CandidatesPerPull;
+
+        // One more than the page, then dropped. A count over the catalog's two
+        // million rows would answer the same question — "is there a next page" —
+        // for far more work, and the extra row is free on a LIMIT that is
+        // already walking the index.
+        List<SourceRecipe> candidates = await _source.SearchAsync(
+            request.Query.Trim(),
+            pageSize + 1,
+            request.Offset,
+            CancellationToken.None);
+
+        bool hasMore = candidates.Count > pageSize;
+
         return new SearchRecipesResponse
         {
-            Candidates = await _source.SearchAsync(
-                request.Query.Trim(),
-                request.Number ?? _options.CandidatesPerPull,
-                CancellationToken.None)
+            Candidates = hasMore ? candidates.Take(pageSize).ToList() : candidates,
+            HasMore = hasMore,
+            PageSize = pageSize
         };
     }
 }

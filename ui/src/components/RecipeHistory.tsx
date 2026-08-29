@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { getRecipeHistory, setWeeklyDish, updateRecipe } from '../api';
+import { clearWeeklyDish, getRecipeHistory, setWeeklyDish, updateRecipe } from '../api';
 import { useApiError } from '../hooks';
 import RecipeMeta from './RecipeMeta';
 import { NOT_PICKED } from '../types';
@@ -26,6 +26,9 @@ export default function RecipeHistory({ onUnauthorized }: { onUnauthorized: () =
   const [cooked, setCooked] = useState<boolean | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [cooking, setCooking] = useState<string | null>(null);
+  // Which dish this visit put on the board. The reload takes its "Cook this
+  // week" away, so without this a misclick has nothing left to click.
+  const [justCooked, setJustCooked] = useState<string | null>(null);
 
   // Filters are applied on submit rather than per keystroke: this is a wall
   // tablet, and every keystroke would be a round trip.
@@ -64,6 +67,22 @@ export default function RecipeHistory({ onUnauthorized }: { onUnauthorized: () =
 
     try {
       await setWeeklyDish(recipeId);
+      setJustCooked(recipeId);
+      reload();
+    } catch (e) {
+      fail(e);
+    } finally {
+      setCooking(null);
+    }
+  }
+
+  async function undo(recipeId: string) {
+    setCooking(recipeId);
+    setError(null);
+
+    try {
+      await clearWeeklyDish();
+      setJustCooked(null);
       reload();
     } catch (e) {
       fail(e);
@@ -141,6 +160,17 @@ export default function RecipeHistory({ onUnauthorized }: { onUnauthorized: () =
                     onClick={() => cook(entry.recipeId)}
                   >
                     Cook this week
+                  </button>
+                )}
+
+                {justCooked === entry.recipeId && (
+                  <button
+                    type="button"
+                    className="link"
+                    disabled={cooking !== null}
+                    onClick={() => undo(entry.recipeId)}
+                  >
+                    Undo
                   </button>
                 )}
               </span>
