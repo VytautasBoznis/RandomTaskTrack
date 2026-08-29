@@ -840,3 +840,143 @@ nav.sub button.tab {
 .recharts-wrapper {
   font-size: 12px;
 }
+
+/* ── Plants ────────────────────────────────────────────────────────────────
+   One card per plant, and it has to carry four things at once: what it is,
+   how to keep it alive, what is scheduled and what is due. The h3s are the
+   dividers that keep those apart on a tablet held at arm's length. */
+.plant h3 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin: 24px 0 8px;
+}
+
+.plant p {
+  margin: 0 0 12px;
+}
+
+.species {
+  color: var(--muted);
+}
+
+/* An identification the model was not sure of. Loud enough to be read before
+   the care advice underneath it is acted on. */
+.guess {
+  color: var(--error);
+}
+
+.care {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px 20px;
+  margin: 0;
+}
+
+.care dt {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+.care dd {
+  margin: 2px 0 0;
+}
+
+.suggested,
+.ask {
+  border-top: 1px solid var(--line);
+  margin-top: 16px;
+  padding-top: 16px;
+}
+
+.suggested .actions,
+.ask .actions {
+  margin-top: 12px;
+}
+
+.ask label {
+  margin-bottom: 4px;
+}
+
+/* Photos, which are also the stage history: a strip that scrolls sideways
+   rather than a grid that pushes the care advice off the screen. */
+.stages {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.stages figure {
+  flex: none;
+  width: 170px;
+  margin: 0;
+}
+
+.stages figcaption {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 6px;
+  font-size: 13px;
+}
+
+.stages figcaption .link {
+  align-self: flex-start;
+}
+
+.photo {
+  display: block;
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  object-fit: cover;
+  aspect-ratio: 1;
+}
+
+/* The add form's preview is the one photo shown whole rather than cropped —
+   it is what the lookup is about to be shown. */
+.photo.preview {
+  max-height: 260px;
+  width: auto;
+  aspect-ratio: auto;
+}
+
+.photo-loading,
+.photo-missing {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  border-radius: 8px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+
+/* Only a file input opens the camera, so the button is a label wrapped round
+   one. Matches button.ghost, because that is what it is standing in for. */
+.file-button {
+  display: inline-flex;
+  align-items: center;
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 600;
+  padding: 8px 16px;
+}
+
+.file-button input {
+  display: none;
+}
+
+.sow-date {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}

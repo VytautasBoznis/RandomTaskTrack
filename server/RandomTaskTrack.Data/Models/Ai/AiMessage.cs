@@ -15,8 +15,16 @@ public class AiMessage
     /// tool calls.</summary>
     public List<AiToolResult> ToolResults { get; set; } = new();
 
+    /// <summary>Set on user turns that show the model something. Not persisted
+    /// with chat history — the photos this app sends belong to a plant, and are
+    /// stored there.</summary>
+    public List<AiImage> Images { get; set; } = new();
+
     public static AiMessage FromUser(string content) =>
         new() { Role = AiMessageRole.User, Content = content };
+
+    public static AiMessage FromUser(string content, List<AiImage> images) =>
+        new() { Role = AiMessageRole.User, Content = content, Images = images };
 
     public static AiMessage FromAssistant(string? content, List<AiToolCall>? toolCalls = null) =>
         new() { Role = AiMessageRole.Assistant, Content = content, ToolCalls = toolCalls ?? new() };

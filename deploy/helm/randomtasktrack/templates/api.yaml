@@ -91,6 +91,8 @@ spec:
                   key: ai-api-key
             - name: Ai__MaxTokens
               value: {{ .Values.ai.maxTokens | quote }}
+            - name: Ai__WebSearch
+              value: {{ .Values.ai.webSearch | quote }}
             - name: Ai__ProviderOptions__effort
               value: {{ .Values.ai.effort | quote }}
             - name: Recipes__Provider

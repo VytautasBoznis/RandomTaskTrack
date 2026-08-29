@@ -9,10 +9,12 @@ using RandomTaskTrack.Business.Operations.Chat;
 using RandomTaskTrack.Business.Operations.Domains;
 using RandomTaskTrack.Business.Operations.Finance;
 using RandomTaskTrack.Business.Operations.Notes;
+using RandomTaskTrack.Business.Operations.Plants;
 using RandomTaskTrack.Business.Operations.Recipes;
 using RandomTaskTrack.Business.Operations.Recurrences;
 using RandomTaskTrack.Business.Operations.Tasks;
 using RandomTaskTrack.Business.Finance.Sources;
+using RandomTaskTrack.Business.Plants;
 using RandomTaskTrack.Business.Recipes;
 using RandomTaskTrack.Business.Recipes.Sources;
 using RandomTaskTrack.Business.Repositories.Auth;
@@ -20,6 +22,7 @@ using RandomTaskTrack.Business.Repositories.Chat;
 using RandomTaskTrack.Business.Repositories.Domains;
 using RandomTaskTrack.Business.Repositories.Finance;
 using RandomTaskTrack.Business.Repositories.Notes;
+using RandomTaskTrack.Business.Repositories.Plants;
 using RandomTaskTrack.Business.Repositories.Recipes;
 using RandomTaskTrack.Business.Repositories.Recurrences;
 using RandomTaskTrack.Business.Repositories.Tasks;
@@ -31,6 +34,7 @@ using RandomTaskTrack.Data.Request.Chat;
 using RandomTaskTrack.Data.Request.Domains;
 using RandomTaskTrack.Data.Request.Finance;
 using RandomTaskTrack.Data.Request.Notes;
+using RandomTaskTrack.Data.Request.Plants;
 using RandomTaskTrack.Data.Request.Recipes;
 using RandomTaskTrack.Data.Request.Recurrences;
 using RandomTaskTrack.Data.Request.Tasks;
@@ -39,18 +43,21 @@ using RandomTaskTrack.Data.Validator.Chat;
 using RandomTaskTrack.Data.Validator.Domains;
 using RandomTaskTrack.Data.Validator.Finance;
 using RandomTaskTrack.Data.Validator.Notes;
+using RandomTaskTrack.Data.Validator.Plants;
 using RandomTaskTrack.Data.Validator.Recipes;
 using RandomTaskTrack.Data.Validator.Recurrences;
 using RandomTaskTrack.Data.Validator.Tasks;
 using RandomTaskTrack.Interfaces.Ai;
 using RandomTaskTrack.Interfaces.Base;
 using RandomTaskTrack.Interfaces.Finance;
+using RandomTaskTrack.Interfaces.Plants;
 using RandomTaskTrack.Interfaces.Recipes;
 using RandomTaskTrack.Interfaces.Repositories.Auth;
 using RandomTaskTrack.Interfaces.Repositories.Chat;
 using RandomTaskTrack.Interfaces.Repositories.Domains;
 using RandomTaskTrack.Interfaces.Repositories.Finance;
 using RandomTaskTrack.Interfaces.Repositories.Notes;
+using RandomTaskTrack.Interfaces.Repositories.Plants;
 using RandomTaskTrack.Interfaces.Repositories.Recipes;
 using RandomTaskTrack.Interfaces.Repositories.Recurrences;
 using RandomTaskTrack.Interfaces.Repositories.Tasks;
@@ -93,6 +100,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IRecipesRepository, RecipesRepository>();
         services.AddScoped<INotesRepository, NotesRepository>();
         services.AddScoped<IFinanceRepository, FinanceRepository>();
+        services.AddScoped<IPlantsRepository, PlantsRepository>();
 
         return services;
     }
@@ -103,6 +111,11 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<RecurrenceMaterializerHostedService>();
         services.AddScoped<IRecipePicker, RecipePicker>();
         services.AddScoped<IFinanceProjector, FinanceProjector>();
+
+        // No key check and no null implementation: IAiProvider already has one,
+        // so an unconfigured app fails the lookup with a clear message and adds
+        // the plant anyway.
+        services.AddScoped<IPlantResearcher, AiPlantResearcher>();
 
         return services;
     }
@@ -297,6 +310,18 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IValidator<UpdateTargetRequest>, UpdateTargetRequestValidator>();
         services.AddSingleton<IValidator<DeleteTargetRequest>, DeleteTargetRequestValidator>();
 
+        // Plants
+        services.AddSingleton<IValidator<GetPlantsRequest>, GetPlantsRequestValidator>();
+        services.AddSingleton<IValidator<CreatePlantRequest>, CreatePlantRequestValidator>();
+        services.AddSingleton<IValidator<UpdatePlantRequest>, UpdatePlantRequestValidator>();
+        services.AddSingleton<IValidator<DeletePlantRequest>, DeletePlantRequestValidator>();
+        services.AddSingleton<IValidator<ResearchPlantRequest>, ResearchPlantRequestValidator>();
+        services.AddSingleton<IValidator<CreatePlantScheduleRequest>, CreatePlantScheduleRequestValidator>();
+        services.AddSingleton<IValidator<AddPlantPhotoRequest>, AddPlantPhotoRequestValidator>();
+        services.AddSingleton<IValidator<GetPlantPhotoRequest>, GetPlantPhotoRequestValidator>();
+        services.AddSingleton<IValidator<DeletePlantPhotoRequest>, DeletePlantPhotoRequestValidator>();
+        services.AddSingleton<IValidator<CreateSowingPlanRequest>, CreateSowingPlanRequestValidator>();
+
         // Chat
         services.AddSingleton<IValidator<SendChatMessageRequest>, SendChatMessageRequestValidator>();
         services.AddSingleton<IValidator<GetConversationsRequest>, GetConversationsRequestValidator>();
@@ -378,6 +403,18 @@ public static class ServiceCollectionExtensions
         services.AddScoped<CreateTargetOperation>();
         services.AddScoped<UpdateTargetOperation>();
         services.AddScoped<DeleteTargetOperation>();
+
+        // Plants
+        services.AddScoped<GetPlantsOperation>();
+        services.AddScoped<CreatePlantOperation>();
+        services.AddScoped<UpdatePlantOperation>();
+        services.AddScoped<DeletePlantOperation>();
+        services.AddScoped<ResearchPlantOperation>();
+        services.AddScoped<CreatePlantScheduleOperation>();
+        services.AddScoped<AddPlantPhotoOperation>();
+        services.AddScoped<GetPlantPhotoOperation>();
+        services.AddScoped<DeletePlantPhotoOperation>();
+        services.AddScoped<CreateSowingPlanOperation>();
 
         // Chat
         services.AddScoped<SendChatMessageOperation>();

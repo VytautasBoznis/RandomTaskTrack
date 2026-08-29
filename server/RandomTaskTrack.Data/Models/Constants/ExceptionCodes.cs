@@ -23,6 +23,9 @@ public static class ExceptionCodes
     public const string RECIPE_SOURCE_NOT_CONFIGURED = "RECIPE_SOURCE_NOT_CONFIGURED";
     public const string RECIPE_SOURCE_FAILED = "RECIPE_SOURCE_FAILED";
 
+    public const string PLANT_NOT_FOUND = "PLANT_NOT_FOUND";
+    public const string PLANT_RESEARCH_FAILED = "PLANT_RESEARCH_FAILED";
+
     public const string FINANCE_FLOW_NOT_FOUND = "FINANCE_FLOW_NOT_FOUND";
     public const string FINANCE_ENTRY_NOT_FOUND = "FINANCE_ENTRY_NOT_FOUND";
     public const string FINANCE_HOLDING_NOT_FOUND = "FINANCE_HOLDING_NOT_FOUND";

@@ -51,6 +51,7 @@ services:
       - Ai__Model=${AI_MODEL:-claude-opus-5}
       - Ai__ApiKey=${AI_API_KEY:-}
       - Ai__MaxTokens=${AI_MAX_TOKENS:-16000}
+      - Ai__WebSearch=${AI_WEB_SEARCH:-true}
       - Ai__ProviderOptions__effort=${AI_EFFORT:-high}
       - Recipes__Provider=${RECIPE_PROVIDER:-spoonacular}
       - Recipes__ApiKey=${RECIPE_API_KEY:-}

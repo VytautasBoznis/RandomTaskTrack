@@ -19,6 +19,12 @@ import type {
   LedgerEntry,
   Note,
   NoteDraft,
+  Plant,
+  PlantCareTask,
+  PlantDraft,
+  PlantEdit,
+  PlantPhotoDraft,
+  PlantSowingStep,
   PriceRefreshResult,
   ProjectionPoint,
   RecipeCandidate,
@@ -249,6 +255,86 @@ export const updateNote = (id: string, draft: NoteDraft) =>
 
 export const deleteNote = (id: string) =>
   request<{ success: boolean }>(`/notes/${id}`, { method: 'DELETE' });
+
+// ── Plants ───────────────────────────────────────────────────────────────────
+// One read for the whole tab: each plant arrives with its care schedule and the
+// tasks that schedule has on the board.
+
+export const getPlants = async () => (await request<{ plants: Plant[] }>('/plants')).plants;
+
+/**
+ * The plant is saved whether or not the lookup answered — `researchError` says
+ * why it did not, and the card offers to try again.
+ */
+export const createPlant = (draft: PlantDraft) =>
+  request<{ plant: Plant; researchError: string | null }>('/plants', {
+    method: 'POST',
+    body: JSON.stringify(draft),
+  });
+
+export const updatePlant = async (id: string, edit: PlantEdit) =>
+  (
+    await request<{ plant: Plant }>(`/plants/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(edit),
+    })
+  ).plant;
+
+/** Null description re-asks with the stored one — the retry after a failure. */
+export const researchPlant = async (id: string, description: string | null, usePhoto: boolean) =>
+  (
+    await request<{ plant: Plant }>(`/plants/${id}/research`, {
+      method: 'POST',
+      body: JSON.stringify({ description, usePhoto }),
+    })
+  ).plant;
+
+/** Adding a photo is how a stage gets recorded; the AI labels it. */
+export const addPlantPhoto = (id: string, draft: PlantPhotoDraft) =>
+  request<{ plant: Plant; readError: string | null }>(`/plants/${id}/photos`, {
+    method: 'POST',
+    body: JSON.stringify(draft),
+  });
+
+export const deletePlantPhoto = (photoId: string) =>
+  request<{ success: boolean }>(`/plants/photos/${photoId}`, { method: 'DELETE' });
+
+/**
+ * Photos sit behind the same bearer token as everything else and an <img> tag
+ * cannot send a header, so the bytes are fetched like any other call and handed
+ * to the tag as an object URL. The caller owns revoking it.
+ */
+export async function fetchPlantPhoto(photoId: string): Promise<string> {
+  const token = getToken();
+
+  const response = await fetch(`${API_BASE}/plants/photos/${photoId}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+
+  if (!response.ok) {
+    throw new ApiError(`Could not load the photo (${response.status})`, response.status);
+  }
+
+  return URL.createObjectURL(await response.blob());
+}
+
+/** Dates the whole chain from the day it actually gets sown. */
+export const createSowingPlan = (id: string, sowOn: string, steps: PlantSowingStep[]) =>
+  request<{ plant: Plant; createdTaskCount: number }>(`/plants/${id}/sowing`, {
+    method: 'POST',
+    body: JSON.stringify({ sowOn, steps }),
+  });
+
+export const createPlantSchedule = (id: string, tasks: PlantCareTask[]) =>
+  request<{ plant: Plant; materializedTaskCount: number }>(`/plants/${id}/schedule`, {
+    method: 'POST',
+    body: JSON.stringify({ tasks }),
+  });
+
+export const deletePlant = (id: string) =>
+  request<{ success: boolean; deletedRecurrenceCount: number; deletedTaskCount: number }>(`/plants/${id}`, {
+    method: 'DELETE',
+  });
 
 export const getConversations = async () =>
   (await request<{ conversations: ConversationListItem[] }>('/chat/conversations')).conversations;

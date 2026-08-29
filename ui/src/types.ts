@@ -226,6 +226,132 @@ export interface NoteDraft {
   content: string;
 }
 
+// ── Plants ───────────────────────────────────────────────────────────────────
+
+/** PlantKind: 1 a plant you have, 2 a seed packet not sown yet. */
+export type PlantKind = 1 | 2;
+
+export const PlantKinds = { Plant: 1, SeedPacket: 2 } as const;
+
+/** One line of the suggested care schedule, and what turns into a recurrence. */
+export interface PlantCareTask {
+  title: string;
+  intervalDays: number;
+  notes: string;
+}
+
+/** One step of a sowing plan, as an offset in days from the sowing itself. */
+export interface PlantSowingStep {
+  title: string;
+  dayOffset: number;
+  notes: string;
+}
+
+/** Filled in for a seed packet only. */
+export interface PlantSowing {
+  method: string;
+  sowWindow: string;
+  sowDepthMm: number | null;
+  spacingCm: number | null;
+  germinationDays: number | null;
+  daysToHarvest: number | null;
+  startIndoors: boolean;
+  notes: string;
+  steps: PlantSowingStep[];
+}
+
+/** A photo, which is also a stage. The bytes come from a separate authed call. */
+export interface PlantPhoto {
+  id: string;
+  plantId: string;
+  mediaType: string;
+  /** What the AI made of it — "first true leaves" — or whatever was typed. */
+  stage: string;
+  note: string;
+  takenOn: string;
+  createdAt: string;
+}
+
+/** The lookup's answer. Every field is prose to read; empty means "nothing useful". */
+export interface PlantProfile {
+  speciesCommon: string | null;
+  speciesLatin: string | null;
+  /** "high" | "medium" | "low" — shown when it is not high. */
+  confidence: string;
+  reasoning: string;
+  summary: string;
+  light: string;
+  water: string;
+  humidity: string;
+  temperature: string;
+  soil: string;
+  feeding: string;
+  repotting: string;
+  toxicity: string;
+  commonProblems: string[];
+  careTasks: PlantCareTask[];
+  /** Seed packets only. */
+  sowing: PlantSowing | null;
+}
+
+export interface Plant {
+  id: string;
+  kind: PlantKind;
+  name: string;
+  location: string | null;
+  species: string | null;
+  latinName: string | null;
+  acquiredOn: string | null;
+  notes: string;
+  /** The free text the identification was made from. */
+  description: string;
+  /** Null until a lookup has succeeded — a plant can exist without one. */
+  profile: PlantProfile | null;
+  researchedAt: string | null;
+  researchModel: string | null;
+  /** Pending care tasks, soonest first. */
+  tasks: TaskListItem[];
+  /** The care schedule, paused entries included. */
+  recurrences: Recurrence[];
+  /** Newest first — the stage history. */
+  photos: PlantPhoto[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** What the add form sends. The lookup runs on the photo and the description. */
+export interface PlantDraft {
+  kind: PlantKind;
+  name: string;
+  location: string | null;
+  description: string | null;
+  /** Raw base64, no data: prefix. Downscaled in the browser first. */
+  imageBase64: string | null;
+  mediaType: string | null;
+  acquiredOn: string | null;
+  notes: string | null;
+}
+
+/** Every field optional; the server reads null as "leave alone". */
+export interface PlantEdit {
+  kind?: PlantKind;
+  name?: string;
+  location?: string | null;
+  species?: string | null;
+  latinName?: string | null;
+  acquiredOn?: string | null;
+  notes?: string;
+}
+
+/** What the photo uploader sends. A null stage asks the AI to read one. */
+export interface PlantPhotoDraft {
+  imageBase64: string;
+  mediaType: string;
+  takenOn: string | null;
+  stage: string | null;
+  note: string | null;
+}
+
 export interface ConversationListItem {
   id: string;
   title: string;

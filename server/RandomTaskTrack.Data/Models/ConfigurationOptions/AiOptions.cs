@@ -13,6 +13,15 @@ public class AiOptions
 
     public int MaxTokens { get; set; } = 8000;
 
+    /// <summary>
+    /// Whether this deployment's key may use server-side web search. A veto,
+    /// not a request: callers ask for search per request (AiRequest), and this
+    /// can only take it away. Off is the setting for a key whose organisation
+    /// has not enabled the tool, or when the per-search charge is not wanted —
+    /// the plant lookup then answers from what the model already knows.
+    /// </summary>
+    public bool WebSearch { get; set; } = true;
+
     /// <summary>Hard ceiling on agent-loop iterations, so a misbehaving model
     /// cannot spin up an unbounded number of billed round trips.</summary>
     public int MaxToolIterations { get; set; } = 8;

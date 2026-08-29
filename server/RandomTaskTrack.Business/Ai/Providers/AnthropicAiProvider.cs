@@ -20,6 +20,20 @@ namespace RandomTaskTrack.Business.Ai.Providers;
 /// </summary>
 public class AnthropicAiProvider : IAiProvider
 {
+    /// <summary>
+    /// How many times a single CompleteAsync will resume a turn the server
+    /// paused mid-search. Bounded for the same reason the agent loop is: a
+    /// model that never stops searching must not run up an unbounded bill.
+    /// </summary>
+    private const int MaxPauseResumes = 4;
+
+    /// <summary>
+    /// Searches are billed per use on top of tokens, so the model gets a budget
+    /// rather than an open bar. Four is enough to check a couple of sources and
+    /// cross-check a cultivar name.
+    /// </summary>
+    private const int MaxWebSearches = 4;
+
     private readonly AnthropicClient _client;
     private readonly AiOptions _options;
     private readonly ILogger<AnthropicAiProvider> _logger;
@@ -44,13 +58,75 @@ public class AnthropicAiProvider : IAiProvider
 
     public async Task<AiModels.AiResponse> CompleteAsync(AiModels.AiRequest request, CancellationToken cancellationToken)
     {
+        List<MessageParam> messages = BuildMessages(request.Messages);
+        var usage = new AiModels.AiUsage();
+
+        // A server-side search can pause the turn part-way through. Resuming is
+        // just "send the same request with the assistant's partial turn on the
+        // end", and it is done here rather than above IAiProvider because the
+        // blocks that have to go back are Anthropic's own — pushing them through
+        // the neutral message model would mean flattening and rebuilding them.
+        for (int resume = 0; ; resume++)
+        {
+            Message response = await SendAsync(request, messages, cancellationToken);
+
+            usage.InputTokens += (int)(response.Usage?.InputTokens ?? 0);
+            usage.OutputTokens += (int)(response.Usage?.OutputTokens ?? 0);
+            usage.CacheReadTokens += (int)(response.Usage?.CacheReadInputTokens ?? 0);
+            usage.CacheWriteTokens += (int)(response.Usage?.CacheCreationInputTokens ?? 0);
+
+            bool paused = response.StopReason?.ToString() == "pause_turn";
+
+            if (!paused || resume >= MaxPauseResumes)
+            {
+                if (paused)
+                {
+                    _logger.LogWarning("Anthropic paused the turn {Count} times without finishing", resume + 1);
+                }
+
+                AiModels.AiResponse mapped = MapResponse(response);
+                mapped.Usage = usage;
+
+                return mapped;
+            }
+
+            messages.Add(new MessageParam
+            {
+                Role = Role.Assistant,
+                Content = ToParams(response.Content)
+            });
+        }
+    }
+
+    /// <summary>
+    /// Response blocks as request blocks, to hand a paused turn back.
+    ///
+    /// Through JSON because that is the only conversion the SDK offers: the two
+    /// unions are the same wire shape, and every variant that can appear here —
+    /// text, thinking, server_tool_use, web_search_tool_result — round-trips
+    /// unchanged. Mapping them by hand would mean rebuilding each result block
+    /// field by field, and dropping the search results' encrypted_content would
+    /// make the resumed request invalid.
+    /// </summary>
+    private static List<ContentBlockParam> ToParams(IReadOnlyList<ContentBlock> content)
+    {
+        string json = JsonSerializer.Serialize(content);
+
+        return JsonSerializer.Deserialize<List<ContentBlockParam>>(json)
+               ?? throw new AiProviderException(
+                   "The AI provider paused mid-search and the turn could not be resumed.",
+                   ExceptionCodes.AI_PROVIDER_FAILED);
+    }
+
+    private async Task<Message> SendAsync(AiModels.AiRequest request, List<MessageParam> messages, CancellationToken cancellationToken)
+    {
         // MessageCreateParams is init-only, so everything is assembled in one
         // initializer rather than mutated afterwards.
         var parameters = new MessageCreateParams
         {
             Model = request.ModelOverride ?? _options.Model,
             MaxTokens = request.MaxTokens,
-            Messages = BuildMessages(request.Messages),
+            Messages = messages,
 
             // The system prompt and tool list are the stable prefix of every
             // turn, so a breakpoint on the last system block caches both.
@@ -65,18 +141,14 @@ public class AnthropicAiProvider : IAiProvider
                     }
                 },
 
-            Tools = request.Tools.Count > 0
-                ? request.Tools.Select(t => new ToolUnion(BuildTool(t))).ToList()
-                : null,
+            Tools = BuildTools(request, _options.WebSearch),
 
             OutputConfig = BuildOutputConfig()
         };
 
-        Message response;
-
         try
         {
-            response = await _client.Messages.Create(parameters, cancellationToken: cancellationToken);
+            return await _client.Messages.Create(parameters, cancellationToken: cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -87,8 +159,24 @@ public class AnthropicAiProvider : IAiProvider
                 ExceptionCodes.AI_PROVIDER_FAILED,
                 ex.Message);
         }
+    }
 
-        return MapResponse(response);
+    /// <summary>
+    /// The caller's own tools, plus web search when it asked for it and the
+    /// deployment allows it. Search is a server-side tool: Anthropic runs it and
+    /// the results arrive in the same response, so nothing here executes
+    /// anything.
+    /// </summary>
+    private static List<ToolUnion>? BuildTools(AiModels.AiRequest request, bool webSearchAllowed)
+    {
+        var tools = request.Tools.Select(t => new ToolUnion(BuildTool(t))).ToList();
+
+        if (request.AllowWebSearch && webSearchAllowed)
+        {
+            tools.Add(new ToolUnion(new WebSearchTool20260209 { MaxUses = MaxWebSearches }));
+        }
+
+        return tools.Count > 0 ? tools : null;
     }
 
     /// <summary>
@@ -123,11 +211,19 @@ public class AnthropicAiProvider : IAiProvider
         {
             switch (message.Role)
             {
-                case AppEnums.AiMessageRole.User:
+                case AppEnums.AiMessageRole.User when message.Images.Count == 0:
                     result.Add(new MessageParam
                     {
                         Role = Role.User,
                         Content = message.Content ?? string.Empty
+                    });
+                    break;
+
+                case AppEnums.AiMessageRole.User:
+                    result.Add(new MessageParam
+                    {
+                        Role = Role.User,
+                        Content = BuildUserContent(message)
                     });
                     break;
 
@@ -160,6 +256,35 @@ public class AnthropicAiProvider : IAiProvider
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Images first, then the question. That is the order Anthropic documents as
+    /// working best, and it reads the same way a person would look: at the thing,
+    /// then at what is being asked about it.
+    /// </summary>
+    private static List<ContentBlockParam> BuildUserContent(AiModels.AiMessage message)
+    {
+        var blocks = new List<ContentBlockParam>();
+
+        foreach (AiModels.AiImage image in message.Images)
+        {
+            blocks.Add(new ImageBlockParam
+            {
+                Source = new Base64ImageSource
+                {
+                    Data = image.Base64,
+                    MediaType = image.MediaType
+                }
+            });
+        }
+
+        if (!string.IsNullOrWhiteSpace(message.Content))
+        {
+            blocks.Add(new TextBlockParam { Text = message.Content });
+        }
+
+        return blocks;
     }
 
     private static List<ContentBlockParam> BuildAssistantContent(AiModels.AiMessage message)

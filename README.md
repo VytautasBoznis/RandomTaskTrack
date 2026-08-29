@@ -20,7 +20,13 @@ never start against an un-migrated database. Health check on
 `http://localhost:5080/health`.
 
 Leaving `AI_API_KEY` empty is supported: chat returns a clear error and
-everything else works.
+everything else works — a plant added without it is saved unidentified, with the
+lookup offered again on its card.
+
+`AI_WEB_SEARCH` (default true) lets the plant lookup use Anthropic's server-side
+search. It is billed per search on top of tokens; set it false for a key whose
+organisation has not enabled the tool, and the lookup answers from what the
+model already knows.
 
 ### UI
 
@@ -76,6 +82,14 @@ Jenkinsfile   build → push → deploy
 | PUT | `/api/recipes/{id}` | rating, notes, tags |
 | GET | `/api/recipes/catalog` | bulk catalog status — loaded, running, progress |
 | POST | `/api/recipes/catalog/import` | starts the bulk load in the background |
+| GET | `/api/plants` | every plant, its photos, care schedule and pending tasks — one call |
+| POST | `/api/plants` | add a plant or a seed packet; a photo and/or a description identifies it |
+| PUT | `/api/plants/{id}` · DELETE `/api/plants/{id}` | delete takes the photos, schedules and pending tasks with it |
+| POST | `/api/plants/{id}/research` | ask again, with a better description and the newest photo |
+| POST | `/api/plants/{id}/photos` | add a photo, which is also a stage — the AI labels it |
+| GET | `/api/plants/photos/{id}` · DELETE | the image bytes · remove a stage |
+| POST | `/api/plants/{id}/schedule` | turn chosen care lines into recurrences |
+| POST | `/api/plants/{id}/sowing` | date a seed packet's plan from the day it gets sown |
 | GET | `/api/finance/overview` | cash, deposits, positions, flows, targets — one call |
 | GET | `/api/finance/projection` | the monthly series; `months`, `historyMonths`, `stockGrowth` |
 | POST | `/api/finance/prices/refresh` | pull share prices and FX rates |
@@ -137,6 +151,80 @@ cards, thin coverage. Both are imported and search sorts `image_url IS NULL`
 last, so pictured dishes come first and the long tail is still there underneath.
 `feed` on each row is what lets "check for new" add the second corpus without
 re-downloading the first.
+
+**Plants are joined to their tasks by payload, not by a foreign key.** A care
+task carries `{"plantId": …, "careTitle": …}` in `data`, and the materializer
+already copies a recurrence's `data` verbatim onto every instance it spawns —
+so one schedule keeps labelling its tasks for free, and neither `task_tasks` nor
+`task_recurrences` grows a column for a scope they otherwise know nothing about.
+The price is that nothing in the database stops a watering task outliving the
+plant, which is why `DeletePlantOperation` sweeps up the schedules and the
+pending tasks itself. `careTitle` is there so the tab can tell an
+already-scheduled suggestion from a new one without reproducing the
+`"Water — the big one"` title format the dashboard needs.
+
+Care schedules are anchored `from_completion`. Watering three days late means
+the next one is three days later too — with `from_schedule` a holiday comes back
+as a column of overdue rows nobody can act on.
+
+**The plant lookup is one completion, and it is allowed to fail.** No tools of
+ours, no conversation, no stored chat: `IPlantResearcher` asks the model to
+answer in JSON and parses what comes back. Failure is not fatal on the way in —
+running with `AI_API_KEY` empty is supported, so a plant added without a lookup
+is still a plant and the card offers to retry. Only pressing "look it up"
+reports the failure as an error, because that button does exactly one thing.
+
+**A photo is worth more than the description, and a seed packet is mostly a
+name.** The lookup takes an image, and the image outranks the words when they
+disagree — people misremember what the garden centre told them. A packet is the
+harder case and gets its own prompt: a phone photo of foil small print is not
+readable and the prompt says so, so the model is told to get the *variety* off
+the front and look the rest up. That is why the lookup has web search on
+(`AiRequest.AllowWebSearch`, vetoable per deployment with `AI_WEB_SEARCH`) —
+sowing depth and days-to-harvest are cultivar-specific, published, and not
+reliably in a model's memory.
+
+Web search is a *server-side* tool, so nothing here executes anything, but it
+can come back with `stop_reason: pause_turn`. Resuming is confined to
+`AnthropicAiProvider`: it hands the assistant's partial turn back and asks
+again, up to four times, so `CompleteAsync` still returns a finished turn to
+everything above it. The response blocks are converted to request blocks through
+JSON, which is the only conversion the SDK offers — and the one that keeps each
+search result's `encrypted_content`, without which the resumed request is
+rejected.
+
+**Every photo is a stage.** There is no separate "mark a stage" anywhere:
+photographing something is how a change gets recorded, so an upload runs a
+second, cheaper AI call that says what the picture shows ("first true leaves",
+"looking leggy") and that becomes the label. Best-effort, like the lookup — a
+photo is worth keeping whether or not anything could be said about it. A
+hand-typed stage skips the call entirely.
+
+The bytes live in Postgres. It is the only thing in this app that already has
+storage in both compose and Kubernetes, a household's plants are a few
+megabytes, and a volume mount plus a second backup story would cost more than it
+buys. The browser downscales to 1568px — the size the model reduces images to
+anyway — before uploading, so a row is a couple of hundred KB. `plant_photos`
+cascades on delete, unlike the care tasks, which have no foreign key to cascade
+from. The list queries never select the `image` column; the UI fetches each
+photo separately, with the bearer token, because an `<img>` tag cannot send a
+header.
+
+**A seed packet is a plant you do not have yet** — same table, `kind = 2`. When
+it comes up it becomes a plant with one UPDATE, keeping the photos and the tasks
+it already has; a separate seeds table would have made sprouting a copy that
+loses both. What differs is the schedule: a packet's plan is *dated one-off
+tasks* (sow → germinate → pot on → harden off → plant out → first harvest),
+generated as day-offsets from whichever day it actually gets sown, while care is
+intervals. A repeating "sow" would be nonsense, and sowing a fortnight late
+should move the whole chain a fortnight.
+
+The profile is stored as one jsonb blob rather than fifteen columns, for the
+reason `recipe_recipes.ingredients` is: the UI renders it, nothing queries it,
+and a prompt that learns to return one more field should not be a migration.
+`species` and `latin_name` are the exception — lifted out into columns because
+they are what a human corrects by hand, and a re-lookup keeps a hand-typed
+correction rather than overwriting it.
 
 **Finance computes, it does not materialize** — the deliberate reverse of the
 task engine above. Task instances are written into `task_tasks` ahead of time
