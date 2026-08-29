@@ -54,6 +54,8 @@ services:
       - Ai__ProviderOptions__effort=${AI_EFFORT:-high}
       - Recipes__Provider=${RECIPE_PROVIDER:-spoonacular}
       - Recipes__ApiKey=${RECIPE_API_KEY:-}
+      - Finance__BaseCurrency=${FINANCE_BASE_CURRENCY:-EUR}
+      - Finance__Provider=${FINANCE_PROVIDER:-yahoo}
       - Scheduler__TimeZone=${TIME_ZONE:-Europe/Vilnius}
       - Cors__AllowedOrigins__0=${CORS_ORIGIN:-http://localhost:3000}
     depends_on:

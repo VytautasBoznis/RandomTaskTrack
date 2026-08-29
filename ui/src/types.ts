@@ -266,3 +266,262 @@ export interface ChatReply {
   inputTokens: number;
   outputTokens: number;
 }
+
+// ── Finance ──────────────────────────────────────────────────────────────────
+// Amounts are decimals on the server and arrive as JSON numbers. Anything named
+// *Base is already converted to the base currency; everything else is in the
+// instrument's own currency.
+
+/** FinanceFlowKind: 1 Income, 2 Expense. */
+export type FlowKind = 1 | 2;
+
+/** FinanceCadence: 1 Weekly, 2 Monthly, 3 Quarterly, 4 Yearly. */
+export type Cadence = 1 | 2 | 3 | 4;
+
+/** TradeSide: 1 Buy, 2 Sell. */
+export type TradeSide = 1 | 2;
+
+/** DepositCompounding: 1 Simple, 2 Monthly, 3 Annual. */
+export type Compounding = 1 | 2 | 3;
+
+export const FlowKinds = { Income: 1, Expense: 2 } as const;
+export const Cadences = { Weekly: 1, Monthly: 2, Quarterly: 3, Yearly: 4 } as const;
+export const TradeSides = { Buy: 1, Sell: 2 } as const;
+
+export const CADENCE_LABELS: Record<Cadence, string> = {
+  1: 'Weekly',
+  2: 'Monthly',
+  3: 'Quarterly',
+  4: 'Yearly',
+};
+
+export const COMPOUNDING_LABELS: Record<Compounding, string> = {
+  1: 'Simple',
+  2: 'Monthly',
+  3: 'Annual',
+};
+
+export interface Currency {
+  code: string;
+  name: string;
+  rateToBase: number;
+  updatedAt: string;
+}
+
+export interface FinanceFlow {
+  id: string;
+  kind: FlowKind;
+  name: string;
+  amount: number;
+  currency: string;
+  cadence: Cadence;
+  dayOfMonth: number | null;
+  monthOfYear: number | null;
+  startsOn: string;
+  endsOn: string | null;
+  category: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LedgerEntry {
+  id: string;
+  flowId: string | null;
+  kind: FlowKind;
+  name: string;
+  amount: number;
+  currency: string;
+  occurredOn: string;
+  category: string | null;
+  note: string | null;
+  createdAt: string;
+}
+
+export interface Trade {
+  id: string;
+  holdingId: string;
+  side: TradeSide;
+  quantity: number;
+  price: number;
+  fee: number;
+  tradedOn: string;
+  note: string | null;
+  createdAt: string;
+}
+
+/** The stored row. The overview returns {@link Position} instead — trades folded in. */
+export interface Holding {
+  id: string;
+  symbol: string;
+  name: string | null;
+  currency: string;
+  lastPrice: number | null;
+  lastPriceAt: string | null;
+  createdAt: string;
+}
+
+export interface Position {
+  id: string;
+  symbol: string;
+  name: string | null;
+  currency: string;
+  lastPrice: number | null;
+  lastPriceAt: string | null;
+  quantity: number;
+  costBasis: number;
+  marketValue: number | null;
+  marketValueBase: number | null;
+  trades: Trade[];
+}
+
+export interface Dividend {
+  id: string;
+  holdingId: string | null;
+  name: string;
+  amount: number;
+  currency: string;
+  cadence: Cadence;
+  dayOfMonth: number | null;
+  monthOfYear: number | null;
+  startsOn: string;
+  endsOn: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Deposit {
+  id: string;
+  name: string;
+  principal: number;
+  currency: string;
+  /** A percentage as the bank writes it: 4.25 means 4.25%. */
+  annualRate: number;
+  compounding: Compounding;
+  openedOn: string;
+  maturesOn: string | null;
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FinanceTarget {
+  id: string;
+  label: string;
+  targetOn: string | null;
+  amount: number | null;
+  note: string | null;
+  createdAt: string;
+}
+
+export interface FinanceOverview {
+  today: string;
+  baseCurrency: string;
+  cashBase: number;
+  depositsBase: number;
+  stocksBase: number;
+  netWorthBase: number;
+  monthlyIncomeBase: number;
+  monthlyExpenseBase: number;
+  /** The totals are short by these — say so rather than showing a flat number. */
+  hasUnpricedHoldings: boolean;
+  flows: FinanceFlow[];
+  positions: Position[];
+  deposits: Deposit[];
+  dividends: Dividend[];
+  targets: FinanceTarget[];
+  currencies: Currency[];
+}
+
+export interface ProjectionPoint {
+  /** First of the month, YYYY-MM-DD. */
+  month: string;
+  /** Ledger actuals rather than projected flows. Balances are null before today. */
+  isActual: boolean;
+  income: number;
+  expenses: number;
+  net: number;
+  cash: number | null;
+  deposits: number | null;
+  stocks: number | null;
+  netWorth: number | null;
+}
+
+/** What the forms send. Nulls mean "leave unchanged" on update. */
+export interface FlowDraft {
+  kind: FlowKind;
+  name: string;
+  amount: number;
+  currency: string;
+  cadence: Cadence;
+  dayOfMonth: number | null;
+  monthOfYear: number | null;
+  startsOn: string;
+  endsOn: string | null;
+  category: string | null;
+}
+
+export interface EntryDraft {
+  kind: FlowKind;
+  name: string;
+  amount: number;
+  currency: string;
+  occurredOn: string;
+  flowId: string | null;
+  category: string | null;
+  note: string | null;
+}
+
+export interface HoldingDraft {
+  symbol: string;
+  name: string | null;
+  currency: string;
+}
+
+export interface TradeDraft {
+  holdingId: string;
+  side: TradeSide;
+  quantity: number;
+  price: number;
+  fee: number | null;
+  tradedOn: string;
+  note: string | null;
+}
+
+export interface DividendDraft {
+  holdingId: string | null;
+  name: string;
+  amount: number;
+  currency: string;
+  cadence: Cadence;
+  dayOfMonth: number | null;
+  monthOfYear: number | null;
+  startsOn: string;
+  endsOn: string | null;
+}
+
+export interface DepositDraft {
+  name: string;
+  principal: number;
+  currency: string;
+  annualRate: number;
+  compounding: Compounding;
+  openedOn: string;
+  maturesOn: string | null;
+  note: string | null;
+}
+
+export interface TargetDraft {
+  label: string;
+  targetOn: string | null;
+  amount: number | null;
+  note: string | null;
+}
+
+export interface PriceRefreshResult {
+  updatedHoldings: number;
+  updatedCurrencies: number;
+  /** Symbols the source had no price for. The stale price is kept. */
+  failed: string[];
+}

@@ -44,7 +44,7 @@ everything the app does.
 migrations/   yuniql workspace — see migrations/README.md
 server/
   RandomTaskTrack.API/         controllers, filters, DI wiring, Program.cs
-  RandomTaskTrack.Business/    operations, repositories, Ai/, Services/
+  RandomTaskTrack.Business/    operations, repositories, Ai/, Finance/, Services/
   RandomTaskTrack.Data/        models, DTOs, requests/responses, validators
   RandomTaskTrack.Interfaces/  IUnitOfWork, repository + AI interfaces
 ui/           React + TypeScript (Vite), served by nginx
@@ -76,13 +76,19 @@ Jenkinsfile   build → push → deploy
 | PUT | `/api/recipes/{id}` | rating, notes, tags |
 | GET | `/api/recipes/catalog` | bulk catalog status — loaded, running, progress |
 | POST | `/api/recipes/catalog/import` | starts the bulk load in the background |
+| GET | `/api/finance/overview` | cash, deposits, positions, flows, targets — one call |
+| GET | `/api/finance/projection` | the monthly series; `months`, `historyMonths`, `stockGrowth` |
+| POST | `/api/finance/prices/refresh` | pull share prices and FX rates |
+| GET/POST/PUT/DELETE | `/api/finance/entries` | the cash ledger |
+| POST/PUT/DELETE | `/api/finance/flows` | recurring income and expenses |
+| POST/PUT/DELETE | `/api/finance/holdings` · `/trades` · `/dividends` · `/deposits` · `/targets` | |
 | GET/POST/PUT/DELETE | `/api/notes` | markdown notes, newest edit first |
 | POST | `/api/chat/messages` | one agent turn |
 | GET | `/api/chat/conversations`, `/api/chat/conversations/{id}` | |
 
 Tokens last **30 days** — the tablet is a permanently signed-in kiosk.
 
-## Three things worth knowing before changing anything
+## Things worth knowing before changing anything
 
 **Recurrences are materialized, not computed.** Instances are written into
 `task_tasks` ahead of time (21-day horizon, hourly background sweep), so the
@@ -131,6 +137,37 @@ cards, thin coverage. Both are imported and search sorts `image_url IS NULL`
 last, so pictured dishes come first and the long tail is still there underneath.
 `feed` on each row is what lets "check for new" add the second corpus without
 re-downloading the first.
+
+**Finance computes, it does not materialize** — the deliberate reverse of the
+task engine above. Task instances are written into `task_tasks` ahead of time
+because each one has to be individually editable over a 21-day horizon. A
+30-year projection is hundreds of monthly buckets nobody edits that change
+wholesale the moment one flow changes, so `FinanceProjector` derives them on
+read and no future row is ever stored. Financial cadence is its own four-value
+enum rather than `task_recurrences`: that table carries a `domain_id`, an
+`anchor_mode` defined in terms of task *completion*, and a materializer, none of
+which mean anything to a salary on the 25th.
+
+**Cash and assets must never double-count.** `fin_entries` is a cash ledger and
+nothing else — income received, expenses paid — and current cash is derived from
+it rather than typed into a box. Deposits and holdings are assets valued
+separately, and their *past* cash movements are already inside that balance:
+buying a share three years ago is why the cash is lower now, so subtracting it
+again would count it twice. The only future cash an asset produces is a deposit
+maturing and a dividend landing. The corollary that bit once already: a deposit
+maturing inside a month must drop out of the deposits column in the same month
+its value lands in cash, or net worth jumps by a whole deposit for one month —
+that is what `FinanceProjector.StillHeld` is for.
+
+Two consequences worth knowing. Net worth is projected **forward only**: valuing
+holdings in the past would need historical prices this app does not store, so
+the months behind today carry actual income and expenses from the ledger and no
+balances at all. And prices come from Yahoo's chart endpoint — no key, no
+account, one request per symbol with a browser User-Agent, which it needs. It is
+an undocumented endpoint rather than a published API; `IStockPriceSource` is one
+method, so replacing it is a class in `Business/Finance/Sources/` and a case in
+`AddFinanceServices`. FX rides along, since a currency pair is just another
+symbol (`EURUSD=X`).
 
 The catalog is opt-in and loads from the Recipes tab — 2.2M recipes, ~2GB,
 streamed straight into Postgres by `RecipeCatalogImporter` with no key and no

@@ -100,6 +100,10 @@ spec:
                 secretKeyRef:
                   name: {{ include "randomtasktrack.secretName" . }}
                   key: recipe-api-key
+            - name: Finance__BaseCurrency
+              value: {{ .Values.finance.baseCurrency | quote }}
+            - name: Finance__Provider
+              value: {{ .Values.finance.provider | quote }}
             - name: Scheduler__TimeZone
               value: {{ .Values.scheduler.timeZone | quote }}
             {{- if .Values.ingress.enabled }}

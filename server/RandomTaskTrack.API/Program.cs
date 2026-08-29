@@ -120,6 +120,7 @@ public class Program
             .AddOperations()
             .AddAiServices()
             .AddRecipeServices()
+            .AddFinanceServices()
             .AddDomainServices();
 
         var app = builder.Build();

@@ -7,15 +7,18 @@ using RandomTaskTrack.Business.Base;
 using RandomTaskTrack.Business.Operations.Auth;
 using RandomTaskTrack.Business.Operations.Chat;
 using RandomTaskTrack.Business.Operations.Domains;
+using RandomTaskTrack.Business.Operations.Finance;
 using RandomTaskTrack.Business.Operations.Notes;
 using RandomTaskTrack.Business.Operations.Recipes;
 using RandomTaskTrack.Business.Operations.Recurrences;
 using RandomTaskTrack.Business.Operations.Tasks;
+using RandomTaskTrack.Business.Finance.Sources;
 using RandomTaskTrack.Business.Recipes;
 using RandomTaskTrack.Business.Recipes.Sources;
 using RandomTaskTrack.Business.Repositories.Auth;
 using RandomTaskTrack.Business.Repositories.Chat;
 using RandomTaskTrack.Business.Repositories.Domains;
+using RandomTaskTrack.Business.Repositories.Finance;
 using RandomTaskTrack.Business.Repositories.Notes;
 using RandomTaskTrack.Business.Repositories.Recipes;
 using RandomTaskTrack.Business.Repositories.Recurrences;
@@ -26,6 +29,7 @@ using RandomTaskTrack.Data.Models.Constants;
 using RandomTaskTrack.Data.Request.Auth;
 using RandomTaskTrack.Data.Request.Chat;
 using RandomTaskTrack.Data.Request.Domains;
+using RandomTaskTrack.Data.Request.Finance;
 using RandomTaskTrack.Data.Request.Notes;
 using RandomTaskTrack.Data.Request.Recipes;
 using RandomTaskTrack.Data.Request.Recurrences;
@@ -33,16 +37,19 @@ using RandomTaskTrack.Data.Request.Tasks;
 using RandomTaskTrack.Data.Validator.Auth;
 using RandomTaskTrack.Data.Validator.Chat;
 using RandomTaskTrack.Data.Validator.Domains;
+using RandomTaskTrack.Data.Validator.Finance;
 using RandomTaskTrack.Data.Validator.Notes;
 using RandomTaskTrack.Data.Validator.Recipes;
 using RandomTaskTrack.Data.Validator.Recurrences;
 using RandomTaskTrack.Data.Validator.Tasks;
 using RandomTaskTrack.Interfaces.Ai;
 using RandomTaskTrack.Interfaces.Base;
+using RandomTaskTrack.Interfaces.Finance;
 using RandomTaskTrack.Interfaces.Recipes;
 using RandomTaskTrack.Interfaces.Repositories.Auth;
 using RandomTaskTrack.Interfaces.Repositories.Chat;
 using RandomTaskTrack.Interfaces.Repositories.Domains;
+using RandomTaskTrack.Interfaces.Repositories.Finance;
 using RandomTaskTrack.Interfaces.Repositories.Notes;
 using RandomTaskTrack.Interfaces.Repositories.Recipes;
 using RandomTaskTrack.Interfaces.Repositories.Recurrences;
@@ -59,6 +66,7 @@ public static class ServiceCollectionExtensions
         services.Configure<DatabaseOptions>(config.GetSection(AppSettingKeys.DatabaseSection));
         services.Configure<AiOptions>(config.GetSection(AppSettingKeys.AiSection));
         services.Configure<RecipeOptions>(config.GetSection(AppSettingKeys.RecipesSection));
+        services.Configure<FinanceOptions>(config.GetSection(AppSettingKeys.FinanceSection));
         services.Configure<SchedulerOptions>(config.GetSection(AppSettingKeys.SchedulerSection));
 
         return services;
@@ -84,6 +92,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IChatRepository, ChatRepository>();
         services.AddScoped<IRecipesRepository, RecipesRepository>();
         services.AddScoped<INotesRepository, NotesRepository>();
+        services.AddScoped<IFinanceRepository, FinanceRepository>();
 
         return services;
     }
@@ -93,6 +102,35 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IRecurrenceMaterializer, RecurrenceMaterializer>();
         services.AddHostedService<RecurrenceMaterializerHostedService>();
         services.AddScoped<IRecipePicker, RecipePicker>();
+        services.AddScoped<IFinanceProjector, FinanceProjector>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// The price source. Same shape as AddRecipeServices, minus the key check:
+    /// Yahoo needs no account, so the default path has nothing to configure and
+    /// nothing to forget.
+    /// </summary>
+    public static IServiceCollection AddFinanceServices(this IServiceCollection services)
+    {
+        services.AddHttpClient(PriceSourceNames.Yahoo);
+
+        services.AddSingleton<IStockPriceSource>(sp =>
+        {
+            FinanceOptions options = sp.GetRequiredService<IOptions<FinanceOptions>>().Value;
+
+            return options.Provider?.ToLowerInvariant() switch
+            {
+                PriceSourceNames.Yahoo or null or "" => new YahooPriceSource(
+                    sp.GetRequiredService<IHttpClientFactory>(),
+                    sp.GetRequiredService<IOptions<FinanceOptions>>(),
+                    sp.GetRequiredService<ILogger<YahooPriceSource>>()),
+                PriceSourceNames.Null => new NullPriceSource(),
+                _ => throw new InvalidOperationException(
+                    $"Unknown price source '{options.Provider}'. Supported: {PriceSourceNames.Yahoo}, {PriceSourceNames.Null}.")
+            };
+        });
 
         return services;
     }
@@ -232,6 +270,33 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IValidator<UpdateNoteRequest>, UpdateNoteRequestValidator>();
         services.AddSingleton<IValidator<DeleteNoteRequest>, DeleteNoteRequestValidator>();
 
+        // Finance
+        services.AddSingleton<IValidator<GetFinanceOverviewRequest>, GetFinanceOverviewRequestValidator>();
+        services.AddSingleton<IValidator<GetProjectionRequest>, GetProjectionRequestValidator>();
+        services.AddSingleton<IValidator<RefreshPricesRequest>, RefreshPricesRequestValidator>();
+        services.AddSingleton<IValidator<CreateFlowRequest>, CreateFlowRequestValidator>();
+        services.AddSingleton<IValidator<UpdateFlowRequest>, UpdateFlowRequestValidator>();
+        services.AddSingleton<IValidator<DeleteFlowRequest>, DeleteFlowRequestValidator>();
+        services.AddSingleton<IValidator<GetEntriesRequest>, GetEntriesRequestValidator>();
+        services.AddSingleton<IValidator<CreateEntryRequest>, CreateEntryRequestValidator>();
+        services.AddSingleton<IValidator<UpdateEntryRequest>, UpdateEntryRequestValidator>();
+        services.AddSingleton<IValidator<DeleteEntryRequest>, DeleteEntryRequestValidator>();
+        services.AddSingleton<IValidator<CreateHoldingRequest>, CreateHoldingRequestValidator>();
+        services.AddSingleton<IValidator<UpdateHoldingRequest>, UpdateHoldingRequestValidator>();
+        services.AddSingleton<IValidator<DeleteHoldingRequest>, DeleteHoldingRequestValidator>();
+        services.AddSingleton<IValidator<CreateTradeRequest>, CreateTradeRequestValidator>();
+        services.AddSingleton<IValidator<UpdateTradeRequest>, UpdateTradeRequestValidator>();
+        services.AddSingleton<IValidator<DeleteTradeRequest>, DeleteTradeRequestValidator>();
+        services.AddSingleton<IValidator<CreateDividendRequest>, CreateDividendRequestValidator>();
+        services.AddSingleton<IValidator<UpdateDividendRequest>, UpdateDividendRequestValidator>();
+        services.AddSingleton<IValidator<DeleteDividendRequest>, DeleteDividendRequestValidator>();
+        services.AddSingleton<IValidator<CreateDepositRequest>, CreateDepositRequestValidator>();
+        services.AddSingleton<IValidator<UpdateDepositRequest>, UpdateDepositRequestValidator>();
+        services.AddSingleton<IValidator<DeleteDepositRequest>, DeleteDepositRequestValidator>();
+        services.AddSingleton<IValidator<CreateTargetRequest>, CreateTargetRequestValidator>();
+        services.AddSingleton<IValidator<UpdateTargetRequest>, UpdateTargetRequestValidator>();
+        services.AddSingleton<IValidator<DeleteTargetRequest>, DeleteTargetRequestValidator>();
+
         // Chat
         services.AddSingleton<IValidator<SendChatMessageRequest>, SendChatMessageRequestValidator>();
         services.AddSingleton<IValidator<GetConversationsRequest>, GetConversationsRequestValidator>();
@@ -286,6 +351,33 @@ public static class ServiceCollectionExtensions
         services.AddScoped<CreateNoteOperation>();
         services.AddScoped<UpdateNoteOperation>();
         services.AddScoped<DeleteNoteOperation>();
+
+        // Finance
+        services.AddScoped<GetFinanceOverviewOperation>();
+        services.AddScoped<GetProjectionOperation>();
+        services.AddScoped<RefreshPricesOperation>();
+        services.AddScoped<CreateFlowOperation>();
+        services.AddScoped<UpdateFlowOperation>();
+        services.AddScoped<DeleteFlowOperation>();
+        services.AddScoped<GetEntriesOperation>();
+        services.AddScoped<CreateEntryOperation>();
+        services.AddScoped<UpdateEntryOperation>();
+        services.AddScoped<DeleteEntryOperation>();
+        services.AddScoped<CreateHoldingOperation>();
+        services.AddScoped<UpdateHoldingOperation>();
+        services.AddScoped<DeleteHoldingOperation>();
+        services.AddScoped<CreateTradeOperation>();
+        services.AddScoped<UpdateTradeOperation>();
+        services.AddScoped<DeleteTradeOperation>();
+        services.AddScoped<CreateDividendOperation>();
+        services.AddScoped<UpdateDividendOperation>();
+        services.AddScoped<DeleteDividendOperation>();
+        services.AddScoped<CreateDepositOperation>();
+        services.AddScoped<UpdateDepositOperation>();
+        services.AddScoped<DeleteDepositOperation>();
+        services.AddScoped<CreateTargetOperation>();
+        services.AddScoped<UpdateTargetOperation>();
+        services.AddScoped<DeleteTargetOperation>();
 
         // Chat
         services.AddScoped<SendChatMessageOperation>();

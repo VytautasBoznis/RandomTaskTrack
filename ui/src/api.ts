@@ -5,8 +5,22 @@ import type {
   ConversationDetail,
   ConversationListItem,
   Dashboard,
+  Deposit,
+  DepositDraft,
+  Dividend,
+  DividendDraft,
+  EntryDraft,
+  FinanceFlow,
+  FinanceOverview,
+  FinanceTarget,
+  FlowDraft,
+  Holding,
+  HoldingDraft,
+  LedgerEntry,
   Note,
   NoteDraft,
+  PriceRefreshResult,
+  ProjectionPoint,
   RecipeCandidate,
   RecipeFamily,
   RecipeHistoryItem,
@@ -14,10 +28,13 @@ import type {
   Recurrence,
   RecurrenceDraft,
   Session,
+  TargetDraft,
   TaskDomain,
   TaskDraft,
   TaskItemStatus,
   TaskListItem,
+  Trade,
+  TradeDraft,
   WeeklyDish,
 } from './types';
 
@@ -247,3 +264,105 @@ export const sendChatMessage = (conversationId: string | null, message: string, 
 
 export const deleteConversation = (id: string) =>
   request<{ success: boolean }>(`/chat/conversations/${id}`, { method: 'DELETE' });
+
+// ── Finance ──────────────────────────────────────────────────────────────────
+// The overview is one round trip for the whole tab, the same bargain
+// /tasks/dashboard makes. Everything else is plain CRUD.
+
+export const getFinanceOverview = async () =>
+  (await request<{ overview: FinanceOverview }>('/finance/overview')).overview;
+
+/**
+ * `stockGrowth` is an annual percentage. Zero holds the portfolio at its last
+ * pulled price, which is the honest default — the caller chooses the optimism.
+ */
+export const getProjection = async (months: number, historyMonths: number, stockGrowth: number) =>
+  (
+    await request<{ points: ProjectionPoint[] }>(
+      `/finance/projection?months=${months}&historyMonths=${historyMonths}&stockGrowth=${stockGrowth}`,
+    )
+  ).points;
+
+// Safe to press twice. A symbol with no price is reported in `failed` and keeps
+// whatever price it had.
+export const refreshPrices = () =>
+  request<PriceRefreshResult>('/finance/prices/refresh', { method: 'POST' });
+
+export const createFlow = (draft: FlowDraft) =>
+  request<{ flow: FinanceFlow }>('/finance/flows', { method: 'POST', body: JSON.stringify(draft) });
+
+export const updateFlow = (id: string, draft: Partial<FlowDraft>) =>
+  request<{ flow: FinanceFlow }>(`/finance/flows/${id}`, { method: 'PUT', body: JSON.stringify(draft) });
+
+// Everything left out keeps its value, so this pauses without touching the schedule.
+export const setFlowActive = (id: string, isActive: boolean) =>
+  request<{ flow: FinanceFlow }>(`/finance/flows/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify({ isActive }),
+  });
+
+export const deleteFlow = (id: string) =>
+  request<{ success: boolean }>(`/finance/flows/${id}`, { method: 'DELETE' });
+
+export const getEntries = async (from: string | null, to: string | null, search: string) => {
+  const query = new URLSearchParams();
+
+  if (from) query.set('from', from);
+  if (to) query.set('to', to);
+  if (search !== '') query.set('search', search);
+
+  const suffix = query.toString() === '' ? '' : `?${query}`;
+
+  return (await request<{ entries: LedgerEntry[] }>(`/finance/entries${suffix}`)).entries;
+};
+
+export const createEntry = (draft: EntryDraft) =>
+  request<{ entry: LedgerEntry }>('/finance/entries', { method: 'POST', body: JSON.stringify(draft) });
+
+export const updateEntry = (id: string, draft: Partial<EntryDraft>) =>
+  request<{ entry: LedgerEntry }>(`/finance/entries/${id}`, { method: 'PUT', body: JSON.stringify(draft) });
+
+export const deleteEntry = (id: string) =>
+  request<{ success: boolean }>(`/finance/entries/${id}`, { method: 'DELETE' });
+
+export const createHolding = (draft: HoldingDraft) =>
+  request<{ holding: Holding }>('/finance/holdings', { method: 'POST', body: JSON.stringify(draft) });
+
+export const deleteHolding = (id: string) =>
+  request<{ success: boolean }>(`/finance/holdings/${id}`, { method: 'DELETE' });
+
+export const createTrade = (draft: TradeDraft) =>
+  request<{ trade: Trade }>('/finance/trades', { method: 'POST', body: JSON.stringify(draft) });
+
+export const updateTrade = (id: string, draft: Partial<TradeDraft>) =>
+  request<{ trade: Trade }>(`/finance/trades/${id}`, { method: 'PUT', body: JSON.stringify(draft) });
+
+export const deleteTrade = (id: string) =>
+  request<{ success: boolean }>(`/finance/trades/${id}`, { method: 'DELETE' });
+
+export const createDividend = (draft: DividendDraft) =>
+  request<{ dividend: Dividend }>('/finance/dividends', { method: 'POST', body: JSON.stringify(draft) });
+
+export const setDividendActive = (id: string, isActive: boolean) =>
+  request<{ dividend: Dividend }>(`/finance/dividends/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify({ isActive }),
+  });
+
+export const deleteDividend = (id: string) =>
+  request<{ success: boolean }>(`/finance/dividends/${id}`, { method: 'DELETE' });
+
+export const createDeposit = (draft: DepositDraft) =>
+  request<{ deposit: Deposit }>('/finance/deposits', { method: 'POST', body: JSON.stringify(draft) });
+
+export const updateDeposit = (id: string, draft: Partial<DepositDraft>) =>
+  request<{ deposit: Deposit }>(`/finance/deposits/${id}`, { method: 'PUT', body: JSON.stringify(draft) });
+
+export const deleteDeposit = (id: string) =>
+  request<{ success: boolean }>(`/finance/deposits/${id}`, { method: 'DELETE' });
+
+export const createTarget = (draft: TargetDraft) =>
+  request<{ target: FinanceTarget }>('/finance/targets', { method: 'POST', body: JSON.stringify(draft) });
+
+export const deleteTarget = (id: string) =>
+  request<{ success: boolean }>(`/finance/targets/${id}`, { method: 'DELETE' });

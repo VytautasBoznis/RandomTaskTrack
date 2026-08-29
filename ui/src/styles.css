@@ -706,3 +706,137 @@ nav.sub button.tab {
     grid-template-columns: 1fr;
   }
 }
+
+/* ── Finance ──────────────────────────────────────────────────────────────── */
+
+/* Stat tiles: these are single numbers, and a chart of one number misses the
+   point. Proportional figures — tabular-nums makes a big number look loose. */
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.tile {
+  margin: 0;
+}
+
+.figure {
+  font-size: 28px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 4px 0 0;
+}
+
+/* The horizon picker: one filter row above everything it scopes. */
+.seg {
+  display: flex;
+  gap: 4px;
+}
+
+.growth {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.growth input {
+  width: 80px;
+}
+
+.search {
+  flex: 1;
+  max-width: 320px;
+}
+
+/* Tooltip. Values are also in the table view below the chart, so hovering is
+   never the only way to read a number. */
+.chart-tip {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+.chart-tip p {
+  margin: 2px 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chart-tip-head {
+  color: var(--muted);
+  font-weight: 600;
+  margin-bottom: 6px !important;
+}
+
+.chart-tip b {
+  margin-left: auto;
+  padding-left: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex: none;
+}
+
+/* The table twin of the charts. */
+.table-scroll {
+  overflow-x: auto;
+  margin-top: 12px;
+}
+
+.fin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.fin-table th,
+.fin-table td {
+  text-align: right;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+.fin-table th:first-child,
+.fin-table td:first-child {
+  text-align: left;
+}
+
+.fin-table th {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.fin-table tr.actual td {
+  color: var(--muted);
+}
+
+.tag {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin-left: 6px;
+}
+
+/* Recharts draws its own focus ring; this keeps the surface from clipping it. */
+.recharts-wrapper {
+  font-size: 12px;
+}

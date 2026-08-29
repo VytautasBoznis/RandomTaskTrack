@@ -79,6 +79,14 @@ ai:
 recipes:
   provider: spoonacular
 
+# No key of any kind — prices come from a public endpoint. Set provider to
+# "null" to disable the refresh button; the rest of the tab is hand-entered and
+# works regardless. baseCurrency must match a fin_currencies row with
+# rate_to_base = 1.
+finance:
+  baseCurrency: EUR
+  provider: yahoo
+
 scheduler:
   timeZone: Europe/Vilnius
 
