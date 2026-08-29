@@ -48,6 +48,10 @@ spec:
             - --platform
             - postgresql
             - --auto-create-db
+            # See docker-compose.yml: the default 30s cannot outlast v0.05's
+            # scan of a loaded recipe_catalog.
+            - --command-timeout
+            - "3600"
             - -c
             # $(DB_PASSWORD) is expanded by the kubelet, so the password stays
             # out of the pod spec.

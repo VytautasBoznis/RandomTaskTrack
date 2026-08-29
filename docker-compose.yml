@@ -20,8 +20,14 @@ services:
     image: yuniql/cli:linux-x64-latest
     volumes:
       - ./migrations:/data
+    # yuniql defaults to a 30 second command timeout, which is fine for DDL and
+    # nowhere near enough for a scan of recipe_catalog: v0.05 regex-matches the
+    # title, steps and ingredients of every row, and at two million rows that is
+    # minutes. Past the timeout Npgsql drops the connection mid-statement and the
+    # run fails with "Exception while reading from stream".
     command: >
       run --platform postgresql --auto-create-db
+      --command-timeout 3600
       -c "Host=db;Port=5432;Database=${DB_NAME:-random_task_track};Username=${DB_USER:-rtt};Password=${DB_PASSWORD}"
     depends_on:
       db:
