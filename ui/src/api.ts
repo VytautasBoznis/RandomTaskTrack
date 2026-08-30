@@ -5,6 +5,7 @@ import type {
   CompletionLogItem,
   ConversationDetail,
   ConversationListItem,
+  CredentialDraft,
   Dashboard,
   Deposit,
   DepositDraft,
@@ -16,8 +17,13 @@ import type {
   FinanceOverview,
   FinanceTarget,
   FlowDraft,
+  GoalDraft,
+  GoalEdit,
+  HeldCredential,
   Holding,
   HoldingDraft,
+  LearningGoal,
+  LearningOverview,
   LedgerEntry,
   Note,
   NoteDraft,
@@ -36,6 +42,8 @@ import type {
   Recurrence,
   RecurrenceDraft,
   Session,
+  StepEdit,
+  StepInput,
   TargetDraft,
   TaskDomain,
   TaskDraft,
@@ -479,3 +487,88 @@ export const createTarget = (draft: TargetDraft) =>
 
 export const deleteTarget = (id: string) =>
   request<{ success: boolean }>(`/finance/targets/${id}`, { method: 'DELETE' });
+
+// ── Learning ─────────────────────────────────────────────────────────────────
+// Every goal write answers with the whole goal, so the card re-renders from
+// what the server now holds rather than from the request echoed back. Same for
+// the credential writes.
+
+export const getLearning = () => request<LearningOverview>('/learning');
+
+export const createGoal = async (draft: GoalDraft) =>
+  (await request<{ goal: LearningGoal }>('/learning/goals', {
+    method: 'POST',
+    body: JSON.stringify(draft),
+  })).goal;
+
+export const updateGoal = async (id: string, edit: GoalEdit) =>
+  (await request<{ goal: LearningGoal }>(`/learning/goals/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(edit),
+  })).goal;
+
+export const deleteGoal = (id: string) =>
+  request<{ success: boolean; deletedTaskCount: number }>(`/learning/goals/${id}`, {
+    method: 'DELETE',
+  });
+
+/** Drafts the route, or drafts it again. Committed steps survive it. */
+export const draftPlan = async (id: string, context: string | null) =>
+  (await request<{ goal: LearningGoal }>(`/learning/goals/${id}/plan`, {
+    method: 'POST',
+    body: JSON.stringify({ context }),
+  })).goal;
+
+/** Bulk, and deduped by title on the server — a double press adds nothing twice. */
+export const addSteps = async (id: string, steps: StepInput[]) =>
+  (await request<{ goal: LearningGoal; createdStepCount: number }>(`/learning/goals/${id}/steps`, {
+    method: 'POST',
+    body: JSON.stringify({ steps }),
+  })).goal;
+
+/** A full replace: the server takes every field, so send the whole step. */
+export const updateStep = async (id: string, edit: StepEdit) =>
+  (await request<{ goal: LearningGoal }>(`/learning/steps/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(edit),
+  })).goal;
+
+export const deleteStep = (id: string) =>
+  request<{ success: boolean; deletedTaskCount: number }>(`/learning/steps/${id}`, {
+    method: 'DELETE',
+  });
+
+export const putStepOnBoard = async (id: string, dueOn: string | null) =>
+  (await request<{ goal: LearningGoal }>(`/learning/steps/${id}/task`, {
+    method: 'POST',
+    body: JSON.stringify({ dueOn }),
+  })).goal;
+
+export const createCredential = async (draft: CredentialDraft) =>
+  (await request<{ credential: HeldCredential }>('/learning/credentials', {
+    method: 'POST',
+    body: JSON.stringify(draft),
+  })).credential;
+
+export const updateCredential = async (id: string, draft: CredentialDraft) =>
+  (await request<{ credential: HeldCredential }>(`/learning/credentials/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(draft),
+  })).credential;
+
+export const deleteCredential = (id: string) =>
+  request<{ success: boolean; deletedTaskCount: number }>(`/learning/credentials/${id}`, {
+    method: 'DELETE',
+  });
+
+/** Looks up whether it expires. Never overwrites an answer already given by hand. */
+export const researchCredential = async (id: string) =>
+  (await request<{ credential: HeldCredential }>(`/learning/credentials/${id}/renewal`, {
+    method: 'POST',
+  })).credential;
+
+export const remindCredential = async (id: string, dueOn: string | null) =>
+  (await request<{ credential: HeldCredential }>(`/learning/credentials/${id}/reminder`, {
+    method: 'POST',
+    body: JSON.stringify({ dueOn }),
+  })).credential;

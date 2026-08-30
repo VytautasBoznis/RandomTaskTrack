@@ -3,6 +3,7 @@ import Chat from './components/Chat';
 import CompletionLog from './components/CompletionLog';
 import Dashboard from './components/Dashboard';
 import Finance from './components/Finance';
+import Learning from './components/Learning';
 import Login from './components/Login';
 import Notes from './components/Notes';
 import Plants from './components/Plants';
@@ -11,7 +12,7 @@ import Recurrences from './components/Recurrences';
 import Register from './components/Register';
 import { clearToken, getToken } from './api';
 
-type View = 'today' | 'recurrences' | 'recipes' | 'plants' | 'finance' | 'notes' | 'log' | 'chat';
+type View = 'today' | 'recurrences' | 'recipes' | 'plants' | 'finance' | 'learning' | 'notes' | 'log' | 'chat';
 
 const VIEWS: { id: View; label: string }[] = [
   { id: 'today', label: 'Today' },
@@ -19,6 +20,7 @@ const VIEWS: { id: View; label: string }[] = [
   { id: 'recipes', label: 'Recipes' },
   { id: 'plants', label: 'Plants' },
   { id: 'finance', label: 'Finance' },
+  { id: 'learning', label: 'Learning' },
   { id: 'notes', label: 'Notes' },
   { id: 'log', label: 'Log' },
   { id: 'chat', label: 'Chat' },
@@ -74,6 +76,7 @@ export default function App() {
           {view === 'recipes' && <Recipes onUnauthorized={signOut} />}
           {view === 'plants' && <Plants onUnauthorized={signOut} />}
           {view === 'finance' && <Finance onUnauthorized={signOut} />}
+          {view === 'learning' && <Learning onUnauthorized={signOut} />}
           {view === 'notes' && <Notes onUnauthorized={signOut} />}
           {view === 'log' && <CompletionLog onUnauthorized={signOut} />}
           {view === 'chat' && <Chat onUnauthorized={signOut} />}

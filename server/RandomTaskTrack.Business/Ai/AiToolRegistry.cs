@@ -1,16 +1,19 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using RandomTaskTrack.Business.Learning;
 using RandomTaskTrack.Data.Dtos.Finance;
 using RandomTaskTrack.Data.Models.Ai;
 using RandomTaskTrack.Data.Models.Constants;
 using RandomTaskTrack.Data.Models.Enums;
 using RandomTaskTrack.Data.Models.Finance;
+using RandomTaskTrack.Data.Models.Learning;
 using RandomTaskTrack.Data.Models.Tasks;
 using RandomTaskTrack.Interfaces.Ai;
 using RandomTaskTrack.Interfaces.Base;
 using RandomTaskTrack.Interfaces.Repositories.Domains;
 using RandomTaskTrack.Interfaces.Repositories.Finance;
+using RandomTaskTrack.Interfaces.Repositories.Learning;
 using RandomTaskTrack.Interfaces.Repositories.Recurrences;
 using RandomTaskTrack.Interfaces.Repositories.Tasks;
 using RandomTaskTrack.Interfaces.Services;
@@ -34,6 +37,7 @@ public class AiToolRegistry : IAiToolRegistry
     private readonly ICompletionsRepository _completionsRepository;
     private readonly IDomainsRepository _domainsRepository;
     private readonly IFinanceRepository _financeRepository;
+    private readonly ILearningRepository _learningRepository;
     private readonly IRecurrenceMaterializer _materializer;
     private readonly IFinanceProjector _projector;
     private readonly IClock _clock;
@@ -45,6 +49,7 @@ public class AiToolRegistry : IAiToolRegistry
         ICompletionsRepository completionsRepository,
         IDomainsRepository domainsRepository,
         IFinanceRepository financeRepository,
+        ILearningRepository learningRepository,
         IRecurrenceMaterializer materializer,
         IFinanceProjector projector,
         IClock clock,
@@ -55,6 +60,7 @@ public class AiToolRegistry : IAiToolRegistry
         _completionsRepository = completionsRepository;
         _domainsRepository = domainsRepository;
         _financeRepository = financeRepository;
+        _learningRepository = learningRepository;
         _materializer = materializer;
         _projector = projector;
         _clock = clock;
@@ -462,6 +468,94 @@ public class AiToolRegistry : IAiToolRegistry
                   "additionalProperties":false
                 }
                 """
+        },
+
+        // ── Learning ─────────────────────────────────────────────────────────
+        new()
+        {
+            Name = AiToolNames.QueryLearning,
+            Description = "The learning picture: the career and study paths with their motivation and target dates, the steps committed to on each and how they are going, and every certification or licence already held with its expiry. Call this before saying anything about progress towards a goal or about when something needs renewing, and to learn the ids the other learning tools take.",
+            InputSchema = """
+                {
+                  "type":"object",
+                  "properties":{
+                    "goal_id":{"type":"string","description":"Include the full drafted plan - phases, suggested certifications, resources, projects - for this one path. Omitted, every path comes back without its plan, which is much shorter."}
+                  },
+                  "additionalProperties":false
+                }
+                """
+        },
+        new()
+        {
+            Name = AiToolNames.CreateLearningStep,
+            Description = "Add a step to a path: something to study, an exam to sit, a course to take, a project to build, a piece of coursework. This is the committed list, not the drafted suggestion - only add what the user has actually decided on. It does not put anything on the dashboard; that is the 'Put on board' button on the tab.",
+            InputSchema = """
+                {
+                  "type":"object",
+                  "properties":{
+                    "goal_id":{"type":"string","description":"Which path, from query_learning."},
+                    "title":{"type":"string","description":"For a course, the exact title as it is actually listed - that is what finds it later."},
+                    "kind":{"type":"string","enum":["study","certification","project","course","assignment","licence","milestone"]},
+                    "target_on":{"type":"string","description":"YYYY-MM-DD. For an assignment this is the due date."},
+                    "notes":{"type":"string","description":"What to do."},
+                    "provider":{"type":"string","description":"Udemy, TryHackMe, Microsoft Learn."},
+                    "url":{"type":"string","description":"Only if you actually know it. A guessed link is worse than none."},
+                    "cost":{"type":"string","description":"Free text: '€14.99', 'free with the subscription'."},
+                    "hours":{"type":"integer","description":"Rough effort, 1-1000."}
+                  },
+                  "required":["goal_id","title"],
+                  "additionalProperties":false
+                }
+                """
+        },
+        new()
+        {
+            Name = AiToolNames.UpdateLearningStep,
+            Description = "Advance a step or record what came of it. Only the fields you pass are changed. `outcome` is where a grade, a mark breakdown or a failed attempt and its retake date go - it is kept separate from `notes`, which is the plan.",
+            InputSchema = """
+                {
+                  "type":"object",
+                  "properties":{
+                    "id":{"type":"string","description":"Step id (uuid), from query_learning."},
+                    "title":{"type":"string"},
+                    "kind":{"type":"string","enum":["study","certification","project","course","assignment","licence","milestone"]},
+                    "status":{"type":"string","enum":["planned","doing","done","dropped"],"description":"dropped keeps it on the path as decided against, which stops a re-draft suggesting it again."},
+                    "target_on":{"type":"string","description":"YYYY-MM-DD."},
+                    "notes":{"type":"string"},
+                    "outcome":{"type":"string","description":"What happened: the grade, the mark, 'failed the lab section, retake booked 12 Jan'."},
+                    "provider":{"type":"string"},
+                    "url":{"type":"string"},
+                    "cost":{"type":"string"},
+                    "hours":{"type":"integer"}
+                  },
+                  "required":["id"],
+                  "additionalProperties":false
+                }
+                """
+        },
+        new()
+        {
+            Name = AiToolNames.LogCredential,
+            Description = "Record a certification or licence the user now holds. Set renewal_kind only if you actually know - 'unknown' is the honest default and the tab has a button that looks the renewal rules up properly.",
+            InputSchema = """
+                {
+                  "type":"object",
+                  "properties":{
+                    "name":{"type":"string"},
+                    "issuer":{"type":"string","description":"Microsoft, AWS, ISC2, EASA."},
+                    "code":{"type":"string","description":"The exam or credential code, e.g. AZ-305."},
+                    "earned_on":{"type":"string","description":"YYYY-MM-DD. Which renewal rules apply usually depends on this date."},
+                    "renewal_kind":{"type":"string","enum":["permanent","expires","unknown"],"description":"permanent for credentials that never lapse - older Microsoft and pre-2011 CompTIA certifications are genuinely permanent. Defaults to unknown."},
+                    "expires_on":{"type":"string","description":"YYYY-MM-DD. Required when renewal_kind is expires, and must be omitted when it is permanent."},
+                    "goal_id":{"type":"string","description":"The path it was earned on the way to, if any."},
+                    "credential_id":{"type":"string","description":"The number on the certificate."},
+                    "url":{"type":"string"},
+                    "notes":{"type":"string"}
+                  },
+                  "required":["name","earned_on"],
+                  "additionalProperties":false
+                }
+                """
         }
     ];
 
@@ -495,6 +589,10 @@ public class AiToolRegistry : IAiToolRegistry
                 AiToolNames.CreateDividend => await CreateDividendAsync(input, unitOfWork),
                 AiToolNames.CreateDeposit => await CreateDepositAsync(input, unitOfWork),
                 AiToolNames.CreateTarget => await CreateTargetAsync(input, unitOfWork),
+                AiToolNames.QueryLearning => await QueryLearningAsync(input, unitOfWork),
+                AiToolNames.CreateLearningStep => await CreateLearningStepAsync(input, unitOfWork),
+                AiToolNames.UpdateLearningStep => await UpdateLearningStepAsync(input, unitOfWork),
+                AiToolNames.LogCredential => await LogCredentialAsync(input, unitOfWork),
                 _ => throw new InvalidOperationException($"Unknown tool '{call.Name}'.")
             };
 
@@ -1183,6 +1281,244 @@ public class AiToolRegistry : IAiToolRegistry
 
         return Serialize(new { created = true, id = target.Id });
     }
+
+    // ── Learning handlers ────────────────────────────────────────────────────
+
+    private async Task<string> QueryLearningAsync(JsonElement input, IUnitOfWork unitOfWork)
+    {
+        DateOnly today = _clock.Today;
+
+        // The full plan only for the path that was asked about. Four drafted
+        // plans is several thousand tokens of prose the model rarely needs, and
+        // sending them on every progress question would push the actual
+        // conversation out of the window.
+        Guid? expand = GetString(input, "goal_id") is null ? null : GetRequiredGuid(input, "goal_id");
+
+        List<LearningGoal> goals = await _learningRepository.GetGoalsAsync(unitOfWork);
+        List<LearningCredential> credentials = await _learningRepository.GetCredentialsAsync(unitOfWork);
+
+        List<LearningStep> steps = goals.Count == 0
+            ? new List<LearningStep>()
+            : await _learningRepository.GetStepsAsync(goals.Select(goal => goal.Id), unitOfWork);
+
+        var onBoard = (steps.Count == 0
+                ? new List<Data.Dtos.Tasks.TaskListItemDto>()
+                : await _learningRepository.GetStepTasksAsync(steps.Select(step => step.Id), unitOfWork))
+            .Select(task => LearningMapper.StepIdOf(task.Data))
+            .Where(id => id.HasValue)
+            .Select(id => id!.Value)
+            .ToHashSet();
+
+        return Serialize(new
+        {
+            today = today.ToString("yyyy-MM-dd"),
+            goals = goals.Select(goal => new
+            {
+                id = goal.Id,
+                title = goal.Title,
+                tier = goal.Tier.ToString().ToLowerInvariant(),
+                status = goal.Status.ToString().ToLowerInvariant(),
+                why = goal.Why,
+                benefits = goal.Benefits,
+                context = goal.Context,
+                target_on = goal.TargetOn?.ToString("yyyy-MM-dd"),
+                days_until_target = goal.TargetOn.HasValue ? goal.TargetOn.Value.DayNumber - today.DayNumber : (int?)null,
+                has_plan = goal.ResearchedAt.HasValue,
+
+                // Only when asked for by id — see `expand` above.
+                plan = expand == goal.Id && goal.ResearchedAt.HasValue ? RawJson(goal.Plan) : (JsonElement?)null,
+
+                steps = steps.Where(step => step.GoalId == goal.Id).Select(step => new
+                {
+                    id = step.Id,
+                    title = step.Title,
+                    kind = step.Kind.ToString().ToLowerInvariant(),
+                    status = step.Status.ToString().ToLowerInvariant(),
+                    target_on = step.TargetOn?.ToString("yyyy-MM-dd"),
+                    notes = step.Notes,
+                    outcome = step.Outcome,
+                    provider = step.Provider,
+                    url = step.Url,
+                    cost = step.Cost,
+                    hours = step.Hours,
+                    on_board = onBoard.Contains(step.Id)
+                })
+            }),
+            credentials = credentials.Select(credential => new
+            {
+                id = credential.Id,
+                goal_id = credential.GoalId,
+                name = credential.Name,
+                issuer = credential.Issuer,
+                code = credential.Code,
+                earned_on = credential.EarnedOn.ToString("yyyy-MM-dd"),
+
+                // permanent / expires / unknown. Never infer an expiry from a
+                // null date: "never expires" and "nobody has checked" are
+                // different facts and this field is the one that separates them.
+                renewal_kind = credential.RenewalKind.ToString().ToLowerInvariant(),
+
+                expires_on = credential.ExpiresOn?.ToString("yyyy-MM-dd"),
+                days_until_expiry = credential.ExpiresOn.HasValue
+                    ? credential.ExpiresOn.Value.DayNumber - today.DayNumber
+                    : (int?)null,
+                renewable_now = LearningMapper.IsRenewable(
+                    credential,
+                    LearningMapper.DeserializeRenewal(credential.Renewal),
+                    today),
+                renewal = credential.ResearchedAt.HasValue ? RawJson(credential.Renewal) : (JsonElement?)null,
+                notes = credential.Notes
+            })
+        });
+    }
+
+    private async Task<string> CreateLearningStepAsync(JsonElement input, IUnitOfWork unitOfWork)
+    {
+        Guid goalId = GetRequiredGuid(input, "goal_id");
+
+        LearningGoal goal = await _learningRepository.GetGoalAsync(goalId, unitOfWork)
+                            ?? throw new InvalidOperationException($"No learning goal with id {goalId}. Call {AiToolNames.QueryLearning} first.");
+
+        var step = new LearningStep
+        {
+            Id = Guid.NewGuid(),
+            GoalId = goal.Id,
+            Title = GetRequiredString(input, "title").Trim(),
+            Kind = ParseStepKind(GetString(input, "kind")),
+            TargetOn = GetDate(input, "target_on"),
+            Notes = GetString(input, "notes")?.Trim() ?? "",
+            Provider = GetString(input, "provider")?.Trim(),
+            Url = GetString(input, "url")?.Trim(),
+            Cost = GetString(input, "cost")?.Trim(),
+            Hours = GetInt(input, "hours"),
+            SortOrder = await _learningRepository.GetMaxStepSortOrderAsync(goal.Id, unitOfWork) + 1
+        };
+
+        if (step.Hours is < 1 or > 1000)
+        {
+            throw new InvalidOperationException("hours must be between 1 and 1000.");
+        }
+
+        // Same dedupe the tab applies. A path that already has the step does not
+        // need a second copy of it from a conversation that lost track.
+        List<LearningStep> existing = await _learningRepository.GetStepsAsync([goal.Id], unitOfWork);
+
+        if (existing.Any(other => string.Equals(other.Title, step.Title, StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new InvalidOperationException($"'{step.Title}' is already on {goal.Title}. Use {AiToolNames.UpdateLearningStep} to change it.");
+        }
+
+        await _learningRepository.CreateStepAsync(step, unitOfWork);
+
+        return Serialize(new { created = true, id = step.Id, goal = goal.Title });
+    }
+
+    private async Task<string> UpdateLearningStepAsync(JsonElement input, IUnitOfWork unitOfWork)
+    {
+        Guid id = GetRequiredGuid(input, "id");
+
+        LearningStep step = await _learningRepository.GetStepAsync(id, unitOfWork)
+                            ?? throw new InvalidOperationException($"No learning step with id {id}. Call {AiToolNames.QueryLearning} first.");
+
+        step.Title = GetString(input, "title")?.Trim() ?? step.Title;
+        step.TargetOn = GetDate(input, "target_on") ?? step.TargetOn;
+        step.Notes = GetString(input, "notes")?.Trim() ?? step.Notes;
+        step.Outcome = GetString(input, "outcome")?.Trim() ?? step.Outcome;
+        step.Provider = GetString(input, "provider")?.Trim() ?? step.Provider;
+        step.Url = GetString(input, "url")?.Trim() ?? step.Url;
+        step.Cost = GetString(input, "cost")?.Trim() ?? step.Cost;
+        step.Hours = GetInt(input, "hours") ?? step.Hours;
+
+        if (GetString(input, "kind") is { } kind)
+        {
+            step.Kind = ParseStepKind(kind);
+        }
+
+        if (GetString(input, "status") is { } status)
+        {
+            step.Status = ParseStepStatus(status);
+        }
+
+        await _learningRepository.UpdateStepAsync(step, unitOfWork);
+
+        return Serialize(new { updated = true, id = step.Id });
+    }
+
+    private async Task<string> LogCredentialAsync(JsonElement input, IUnitOfWork unitOfWork)
+    {
+        Guid? goalId = null;
+
+        if (GetString(input, "goal_id") is not null)
+        {
+            goalId = GetRequiredGuid(input, "goal_id");
+
+            if (await _learningRepository.GetGoalAsync(goalId.Value, unitOfWork) is null)
+            {
+                throw new InvalidOperationException($"No learning goal with id {goalId}.");
+            }
+        }
+
+        var credential = new LearningCredential
+        {
+            Id = Guid.NewGuid(),
+            GoalId = goalId,
+            Name = GetRequiredString(input, "name").Trim(),
+            Issuer = GetString(input, "issuer")?.Trim() ?? "",
+            Code = GetString(input, "code")?.Trim(),
+            EarnedOn = GetDate(input, "earned_on") ?? throw new InvalidOperationException("earned_on is required (YYYY-MM-DD)."),
+            RenewalKind = ParseRenewalKind(GetString(input, "renewal_kind")),
+            ExpiresOn = GetDate(input, "expires_on"),
+            CredentialId = GetString(input, "credential_id")?.Trim(),
+            Url = GetString(input, "url")?.Trim(),
+            Notes = GetString(input, "notes")?.Trim() ?? ""
+        };
+
+        // The same rule the database CHECK enforces, phrased for the model so it
+        // can correct itself rather than losing the turn to a constraint error.
+        if (!Data.Validator.Learning.CredentialRules.BeAConsistentExpiry(credential.RenewalKind, credential.ExpiresOn))
+        {
+            throw new InvalidOperationException(Data.Validator.Learning.CredentialRules.ExpiryMessage);
+        }
+
+        await _learningRepository.CreateCredentialAsync(credential, unitOfWork);
+
+        return Serialize(new
+        {
+            logged = true,
+            id = credential.Id,
+            renewal_kind = credential.RenewalKind.ToString().ToLowerInvariant(),
+            expires_on = credential.ExpiresOn?.ToString("yyyy-MM-dd")
+        });
+    }
+
+    private static LearningStepKind ParseStepKind(string? value) => value?.ToLowerInvariant() switch
+    {
+        null or "" or "study" => LearningStepKind.Study,
+        "certification" => LearningStepKind.Certification,
+        "project" => LearningStepKind.Project,
+        "course" => LearningStepKind.Course,
+        "assignment" => LearningStepKind.Assignment,
+        "licence" => LearningStepKind.Licence,
+        "milestone" => LearningStepKind.Milestone,
+        _ => throw new InvalidOperationException($"Unknown kind '{value}'. Use study, certification, project, course, assignment, licence or milestone.")
+    };
+
+    private static LearningStepStatus ParseStepStatus(string value) => value.ToLowerInvariant() switch
+    {
+        "planned" => LearningStepStatus.Planned,
+        "doing" => LearningStepStatus.Doing,
+        "done" => LearningStepStatus.Done,
+        "dropped" => LearningStepStatus.Dropped,
+        _ => throw new InvalidOperationException($"Unknown status '{value}'. Use planned, doing, done or dropped.")
+    };
+
+    private static CredentialRenewalKind ParseRenewalKind(string? value) => value?.ToLowerInvariant() switch
+    {
+        null or "" or "unknown" => CredentialRenewalKind.Unknown,
+        "permanent" => CredentialRenewalKind.Permanent,
+        "expires" => CredentialRenewalKind.Expires,
+        _ => throw new InvalidOperationException($"Unknown renewal_kind '{value}'. Use permanent, expires or unknown.")
+    };
 
     /// <summary>
     /// Money tables have a foreign key to a plain-text currency code, so a

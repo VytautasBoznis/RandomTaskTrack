@@ -713,3 +713,262 @@ export interface PriceRefreshResult {
   /** Symbols the source had no price for. The stale price is kept. */
   failed: string[];
 }
+
+// ── Learning ─────────────────────────────────────────────────────────────────
+
+/** LearningTier: 1 primary … 4 nice to have. Four fixed rungs, not a free sort. */
+export type LearningTier = 1 | 2 | 3 | 4;
+
+export const LearningTiers = { Primary: 1, Secondary: 2, Tertiary: 3, NiceToHave: 4 } as const;
+
+export const TIER_LABELS: Record<LearningTier, string> = {
+  1: 'Primary',
+  2: 'Secondary',
+  3: 'Tertiary',
+  4: 'Nice to have',
+};
+
+/** LearningGoalStatus: 1 active, 2 achieved, 3 parked. */
+export type LearningGoalStatus = 1 | 2 | 3;
+
+export const GOAL_STATUS_LABELS: Record<LearningGoalStatus, string> = {
+  1: 'Active',
+  2: 'Achieved',
+  3: 'Parked',
+};
+
+/** LearningStepKind: 1 study, 2 certification, 3 project, 4 course, 5 assignment, 6 licence, 7 milestone. */
+export type LearningStepKind = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+
+export const StepKinds = {
+  Study: 1,
+  Certification: 2,
+  Project: 3,
+  Course: 4,
+  Assignment: 5,
+  Licence: 6,
+  Milestone: 7,
+} as const;
+
+export const STEP_KIND_LABELS: Record<LearningStepKind, string> = {
+  1: 'Study',
+  2: 'Cert',
+  3: 'Project',
+  4: 'Course',
+  5: 'Assignment',
+  6: 'Licence',
+  7: 'Milestone',
+};
+
+/** LearningStepStatus: 1 planned, 2 doing, 3 done, 4 dropped. */
+export type LearningStepStatus = 1 | 2 | 3 | 4;
+
+export const StepStatus = { Planned: 1, Doing: 2, Done: 3, Dropped: 4 } as const;
+
+export const STEP_STATUS_LABELS: Record<LearningStepStatus, string> = {
+  1: 'Planned',
+  2: 'Doing',
+  3: 'Done',
+  4: 'Dropped',
+};
+
+/**
+ * CredentialRenewalKind: 1 permanent, 2 expires, 3 unknown.
+ *
+ * Three states rather than a nullable expiry, because "never expires" and
+ * "nobody has checked" need different treatment — an old MCSD should never
+ * appear in a renewal list again.
+ */
+export type CredentialRenewalKind = 1 | 2 | 3;
+
+export const RenewalKinds = { Permanent: 1, Expires: 2, Unknown: 3 } as const;
+
+export const RENEWAL_KIND_LABELS: Record<CredentialRenewalKind, string> = {
+  1: 'Permanent',
+  2: 'Expires',
+  3: 'Not checked',
+};
+
+export interface LearningPhase {
+  title: string;
+  weeks: number;
+  focus: string;
+  outcome: string;
+}
+
+export interface LearningCertificationSuggestion {
+  name: string;
+  issuer: string;
+  code: string;
+  order: number;
+  typicalCost: string;
+  prepHours: number;
+  why: string;
+  validity: string;
+}
+
+/** provider + title is the handle that survives; url is best-effort. */
+export interface LearningResource {
+  title: string;
+  kind: string;
+  provider: string;
+  url: string;
+  cost: string;
+  why: string;
+  phase: number;
+}
+
+export interface LearningProject {
+  title: string;
+  level: string;
+  build: string;
+  proves: string;
+}
+
+/** The drafted route. Suggested, not committed — steps are what got committed. */
+export interface LearningPlan {
+  summary: string;
+  /** What "prepared" means, concretely. The answer to "what level do I want". */
+  targetDefinition: string;
+  assumedLevel: string;
+  weeklyHours: number;
+  prerequisites: string[];
+  phases: LearningPhase[];
+  certifications: LearningCertificationSuggestion[];
+  resources: LearningResource[];
+  projects: LearningProject[];
+  handsOn: string[];
+  risks: string[];
+}
+
+export interface LearningStep {
+  id: string;
+  goalId: string;
+  title: string;
+  kind: LearningStepKind;
+  status: LearningStepStatus;
+  targetOn: string | null;
+  /** What to do. */
+  notes: string;
+  /** What happened: the grade, the retake. The row badges when this is set. */
+  outcome: string;
+  provider: string | null;
+  url: string | null;
+  cost: string | null;
+  hours: number | null;
+  sortOrder: number;
+  /** The pending task it has on the board, if any. */
+  task: TaskListItem | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LearningGoal {
+  id: string;
+  title: string;
+  tier: LearningTier;
+  status: LearningGoalStatus;
+  why: string;
+  benefits: string;
+  targetOn: string | null;
+  /** What the draft was given: current level, hours a week, constraints. */
+  context: string;
+  /** Null until the first successful draft. */
+  plan: LearningPlan | null;
+  researchedAt: string | null;
+  researchModel: string | null;
+  notes: string;
+  steps: LearningStep[];
+  /** Negative once the target has passed. Derived server-side. */
+  daysUntilTarget: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CredentialRenewal {
+  /** Null for permanent, and when the lookup could not establish it. */
+  validityMonths: number | null;
+  renewal: string;
+  windowOpensDays: number;
+  cost: string;
+  ifLapsed: string;
+  officialUrl: string;
+  notes: string;
+}
+
+/** Named for what it is rather than `Credential`, which the DOM already has. */
+export interface HeldCredential {
+  id: string;
+  goalId: string | null;
+  name: string;
+  issuer: string;
+  code: string | null;
+  earnedOn: string;
+  renewalKind: CredentialRenewalKind;
+  expiresOn: string | null;
+  credentialId: string | null;
+  url: string | null;
+  /** Null until the renewal rules have been looked up. */
+  renewal: CredentialRenewal | null;
+  researchedAt: string | null;
+  researchModel: string | null;
+  notes: string;
+  /** Null for permanent and for unchecked — never render those as a countdown. */
+  daysUntilExpiry: number | null;
+  /** Whether the renewal window is open, from the window the lookup found. */
+  isRenewable: boolean;
+  task: TaskListItem | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LearningOverview {
+  goals: LearningGoal[];
+  credentials: HeldCredential[];
+}
+
+export interface GoalDraft {
+  title: string;
+  tier: LearningTier;
+  why: string | null;
+  benefits: string | null;
+  targetOn: string | null;
+  context: string | null;
+  notes: string | null;
+}
+
+export interface GoalEdit extends GoalDraft {
+  status: LearningGoalStatus;
+}
+
+/** One line being committed to a path — off the plan, or typed by hand. */
+export interface StepInput {
+  title: string;
+  kind: LearningStepKind;
+  targetOn: string | null;
+  notes: string | null;
+  provider: string | null;
+  url: string | null;
+  cost: string | null;
+  hours: number | null;
+}
+
+/** A full replace: the server takes every field, not a patch. */
+export interface StepEdit extends StepInput {
+  status: LearningStepStatus;
+  outcome: string | null;
+  sortOrder: number;
+}
+
+export interface CredentialDraft {
+  name: string;
+  issuer: string | null;
+  code: string | null;
+  earnedOn: string;
+  renewalKind: CredentialRenewalKind;
+  expiresOn: string | null;
+  goalId: string | null;
+  credentialId: string | null;
+  url: string | null;
+  notes: string | null;
+}

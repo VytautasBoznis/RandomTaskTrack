@@ -250,13 +250,19 @@ public class FinanceRepository : IFinanceRepository
         IUnitOfWork unitOfWork)
     {
         var rows = await unitOfWork.Connection.QueryAsync<LedgerEntry>(
+            // Every optional filter is cast, the same way RecipesRepository and
+            // RecurrencesRepository do it. A null parameter whose only use is
+            // "IS NULL" gives Postgres nothing to infer a type from, and it
+            // refuses to plan the statement at all — 42P08, not a wrong answer.
+            // "Show me the whole ledger" sends null for both dates, so this is
+            // the ordinary path rather than an edge case.
             $@"SELECT {EntryColumns}
                FROM tracker.fin_entries
-               WHERE (@from IS NULL OR occurred_on >= @from)
-                 AND (@to   IS NULL OR occurred_on <= @to)
-                 AND (@kind IS NULL OR kind = @kind)
-                 AND (@search IS NULL OR name ILIKE '%' || @search || '%'
-                                      OR category ILIKE '%' || @search || '%')
+               WHERE (@from::date IS NULL OR occurred_on >= @from::date)
+                 AND (@to::date   IS NULL OR occurred_on <= @to::date)
+                 AND (@kind::int  IS NULL OR kind = @kind::int)
+                 AND (@search::text IS NULL OR name ILIKE '%' || @search || '%'
+                                            OR category ILIKE '%' || @search || '%')
                ORDER BY occurred_on DESC, created_at DESC
                LIMIT @limit",
             new { from, to, kind = (int?)kind, search, limit },

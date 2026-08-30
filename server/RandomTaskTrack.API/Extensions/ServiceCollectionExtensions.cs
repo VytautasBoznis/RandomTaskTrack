@@ -1,4 +1,4 @@
-using FluentValidation;
+﻿using FluentValidation;
 using Microsoft.Extensions.Options;
 using RandomTaskTrack.Business.Ai;
 using RandomTaskTrack.Business.Ai.Providers;
@@ -8,12 +8,14 @@ using RandomTaskTrack.Business.Operations.Auth;
 using RandomTaskTrack.Business.Operations.Chat;
 using RandomTaskTrack.Business.Operations.Domains;
 using RandomTaskTrack.Business.Operations.Finance;
+using RandomTaskTrack.Business.Operations.Learning;
 using RandomTaskTrack.Business.Operations.Notes;
 using RandomTaskTrack.Business.Operations.Plants;
 using RandomTaskTrack.Business.Operations.Recipes;
 using RandomTaskTrack.Business.Operations.Recurrences;
 using RandomTaskTrack.Business.Operations.Tasks;
 using RandomTaskTrack.Business.Finance.Sources;
+using RandomTaskTrack.Business.Learning;
 using RandomTaskTrack.Business.Plants;
 using RandomTaskTrack.Business.Recipes;
 using RandomTaskTrack.Business.Recipes.Sources;
@@ -21,6 +23,7 @@ using RandomTaskTrack.Business.Repositories.Auth;
 using RandomTaskTrack.Business.Repositories.Chat;
 using RandomTaskTrack.Business.Repositories.Domains;
 using RandomTaskTrack.Business.Repositories.Finance;
+using RandomTaskTrack.Business.Repositories.Learning;
 using RandomTaskTrack.Business.Repositories.Notes;
 using RandomTaskTrack.Business.Repositories.Plants;
 using RandomTaskTrack.Business.Repositories.Recipes;
@@ -33,6 +36,7 @@ using RandomTaskTrack.Data.Request.Auth;
 using RandomTaskTrack.Data.Request.Chat;
 using RandomTaskTrack.Data.Request.Domains;
 using RandomTaskTrack.Data.Request.Finance;
+using RandomTaskTrack.Data.Request.Learning;
 using RandomTaskTrack.Data.Request.Notes;
 using RandomTaskTrack.Data.Request.Plants;
 using RandomTaskTrack.Data.Request.Recipes;
@@ -42,6 +46,7 @@ using RandomTaskTrack.Data.Validator.Auth;
 using RandomTaskTrack.Data.Validator.Chat;
 using RandomTaskTrack.Data.Validator.Domains;
 using RandomTaskTrack.Data.Validator.Finance;
+using RandomTaskTrack.Data.Validator.Learning;
 using RandomTaskTrack.Data.Validator.Notes;
 using RandomTaskTrack.Data.Validator.Plants;
 using RandomTaskTrack.Data.Validator.Recipes;
@@ -50,12 +55,14 @@ using RandomTaskTrack.Data.Validator.Tasks;
 using RandomTaskTrack.Interfaces.Ai;
 using RandomTaskTrack.Interfaces.Base;
 using RandomTaskTrack.Interfaces.Finance;
+using RandomTaskTrack.Interfaces.Learning;
 using RandomTaskTrack.Interfaces.Plants;
 using RandomTaskTrack.Interfaces.Recipes;
 using RandomTaskTrack.Interfaces.Repositories.Auth;
 using RandomTaskTrack.Interfaces.Repositories.Chat;
 using RandomTaskTrack.Interfaces.Repositories.Domains;
 using RandomTaskTrack.Interfaces.Repositories.Finance;
+using RandomTaskTrack.Interfaces.Repositories.Learning;
 using RandomTaskTrack.Interfaces.Repositories.Notes;
 using RandomTaskTrack.Interfaces.Repositories.Plants;
 using RandomTaskTrack.Interfaces.Repositories.Recipes;
@@ -101,6 +108,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<INotesRepository, NotesRepository>();
         services.AddScoped<IFinanceRepository, FinanceRepository>();
         services.AddScoped<IPlantsRepository, PlantsRepository>();
+        services.AddScoped<ILearningRepository, LearningRepository>();
 
         return services;
     }
@@ -116,6 +124,10 @@ public static class ServiceCollectionExtensions
         // so an unconfigured app fails the lookup with a clear message and adds
         // the plant anyway.
         services.AddScoped<IPlantResearcher, AiPlantResearcher>();
+
+        // Same bargain: no key means the draft fails with a clear message and
+        // the goal, the steps and the credentials all still work.
+        services.AddScoped<ILearningResearcher, AiLearningResearcher>();
 
         return services;
     }
@@ -326,6 +338,22 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IValidator<DeletePlantPhotoRequest>, DeletePlantPhotoRequestValidator>();
         services.AddSingleton<IValidator<CreateSowingPlanRequest>, CreateSowingPlanRequestValidator>();
 
+        // Learning
+        services.AddSingleton<IValidator<GetLearningRequest>, GetLearningRequestValidator>();
+        services.AddSingleton<IValidator<CreateLearningGoalRequest>, CreateLearningGoalRequestValidator>();
+        services.AddSingleton<IValidator<UpdateLearningGoalRequest>, UpdateLearningGoalRequestValidator>();
+        services.AddSingleton<IValidator<DeleteLearningGoalRequest>, DeleteLearningGoalRequestValidator>();
+        services.AddSingleton<IValidator<DraftLearningPlanRequest>, DraftLearningPlanRequestValidator>();
+        services.AddSingleton<IValidator<CreateLearningStepsRequest>, CreateLearningStepsRequestValidator>();
+        services.AddSingleton<IValidator<UpdateLearningStepRequest>, UpdateLearningStepRequestValidator>();
+        services.AddSingleton<IValidator<DeleteLearningStepRequest>, DeleteLearningStepRequestValidator>();
+        services.AddSingleton<IValidator<CreateLearningStepTaskRequest>, CreateLearningStepTaskRequestValidator>();
+        services.AddSingleton<IValidator<CreateCredentialRequest>, CreateCredentialRequestValidator>();
+        services.AddSingleton<IValidator<UpdateCredentialRequest>, UpdateCredentialRequestValidator>();
+        services.AddSingleton<IValidator<DeleteCredentialRequest>, DeleteCredentialRequestValidator>();
+        services.AddSingleton<IValidator<ResearchCredentialRequest>, ResearchCredentialRequestValidator>();
+        services.AddSingleton<IValidator<CreateRenewalReminderRequest>, CreateRenewalReminderRequestValidator>();
+
         // Chat
         services.AddSingleton<IValidator<SendChatMessageRequest>, SendChatMessageRequestValidator>();
         services.AddSingleton<IValidator<GetConversationsRequest>, GetConversationsRequestValidator>();
@@ -423,6 +451,22 @@ public static class ServiceCollectionExtensions
         services.AddScoped<GetPlantPhotoOperation>();
         services.AddScoped<DeletePlantPhotoOperation>();
         services.AddScoped<CreateSowingPlanOperation>();
+
+        // Learning
+        services.AddScoped<GetLearningOperation>();
+        services.AddScoped<CreateLearningGoalOperation>();
+        services.AddScoped<UpdateLearningGoalOperation>();
+        services.AddScoped<DeleteLearningGoalOperation>();
+        services.AddScoped<DraftLearningPlanOperation>();
+        services.AddScoped<CreateLearningStepsOperation>();
+        services.AddScoped<UpdateLearningStepOperation>();
+        services.AddScoped<DeleteLearningStepOperation>();
+        services.AddScoped<CreateLearningStepTaskOperation>();
+        services.AddScoped<CreateCredentialOperation>();
+        services.AddScoped<UpdateCredentialOperation>();
+        services.AddScoped<DeleteCredentialOperation>();
+        services.AddScoped<ResearchCredentialOperation>();
+        services.AddScoped<CreateRenewalReminderOperation>();
 
         // Chat
         services.AddScoped<SendChatMessageOperation>();

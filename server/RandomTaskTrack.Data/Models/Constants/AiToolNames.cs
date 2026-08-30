@@ -30,4 +30,12 @@ public static class AiToolNames
     public const string CreateDividend = "create_dividend";
     public const string CreateDeposit = "create_deposit";
     public const string CreateTarget = "create_target";
+
+    // Learning. query_learning is the only source of a claim about a path's
+    // progress or a credential's expiry — see the "Learning" section of the
+    // system prompt. There is no delete: the tab owns that.
+    public const string QueryLearning = "query_learning";
+    public const string CreateLearningStep = "create_learning_step";
+    public const string UpdateLearningStep = "update_learning_step";
+    public const string LogCredential = "log_credential";
 }

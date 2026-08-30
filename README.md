@@ -98,6 +98,15 @@ Jenkinsfile   build → push → deploy
 | POST/PUT/DELETE | `/api/finance/accounts` | the pots the money sits in |
 | POST | `/api/finance/accounts/{id}/balance` | type the balance you can see; logs the difference |
 | POST/PUT/DELETE | `/api/finance/holdings` · `/trades` · `/dividends` · `/deposits` · `/targets` | |
+| GET | `/api/learning` | every path with its steps, and every credential held — one call |
+| POST/PUT/DELETE | `/api/learning/goals[/{id}]` | a path: why, expected benefits, "prepared by" |
+| POST | `/api/learning/goals/{id}/plan` | draft or re-draft the route; committed steps survive it |
+| POST | `/api/learning/goals/{id}/steps` | commit chosen lines of the plan to the path |
+| PUT/DELETE | `/api/learning/steps/{id}` | status, dates, and the result — the grade or the retake |
+| POST | `/api/learning/steps/{id}/task` | put a step on the board as a dated task |
+| POST/PUT/DELETE | `/api/learning/credentials[/{id}]` | what you already hold; PUT is also how a renewal is recorded |
+| POST | `/api/learning/credentials/{id}/renewal` | look up whether it expires, and how it renews |
+| POST | `/api/learning/credentials/{id}/reminder` | a dated renewal on the board; rejected for a permanent one |
 | GET/POST/PUT/DELETE | `/api/notes` | markdown notes, newest edit first |
 | POST | `/api/chat/messages` | one agent turn |
 | GET | `/api/chat/conversations`, `/api/chat/conversations/{id}` | |
@@ -279,6 +288,46 @@ an undocumented endpoint rather than a published API; `IStockPriceSource` is one
 method, so replacing it is a class in `Business/Finance/Sources/` and a case in
 `AddFinanceServices`. FX rides along, since a currency pair is just another
 symbol (`EURUSD=X`).
+
+**Learning splits what the AI said from what you agreed to.** `learn_goals.plan`
+is a jsonb blob — phases, certifications worth sitting, courses and labs,
+projects by level — that the UI renders and nothing queries, exactly as
+`plant_plants.profile` does. A `learn_steps` row is a line you accepted. That
+split is what makes re-drafting cheap: asking again replaces the suggestion and
+leaves every commitment, date and grade untouched. They also have different
+lifetimes — a plan is read whole and replaced whole, a step is edited one at a
+time — which is why a single table with a `parent_id` would have been wrong.
+
+A step carries `notes` (what to do) and `outcome` (what happened: the grade, the
+mark breakdown, "failed the lab section, retake booked 12 Jan"). Those two
+columns plus `kind = assignment` are the whole of coursework tracking; a
+separate assignments table would have bought a weighted average and cost a
+second CRUD stack.
+
+**Not every credential expires, so the expiry is a tri-state.**
+`learn_credentials.renewal_kind` is permanent, expires or unknown, and
+`ck_learn_credentials_renewal` keeps it agreeing with `expires_on`. A nullable
+date alone cannot tell "never expires" from "nobody has checked", and
+conflating them either nags forever about an older MCSD — permanent, and
+rightly invisible to every renewal list — or lets a real expiry pass unwatched.
+The lookup fills this in only when neither a kind nor a date has been given:
+the person holding the certificate knows what it says, and a search result
+should not talk them out of it. An answer that claims permanence *and* a
+validity period is stored as unknown rather than as a guessed date.
+
+There is deliberately **no table of provider renewal rules** anywhere in the
+code. Microsoft moved to annual free renewals in 2022 while leaving the older
+certifications permanent; AWS and ISC2 differ again. A hardcoded table would
+have gone quietly wrong that day, so the rules are looked up per credential,
+web-search backed, stored with the date they were checked, and overridable by
+hand.
+
+**Renewals are derived, not materialized** — the same call Finance makes.
+"Expires in 47 days" is computed on read; a reminder task exists only once you
+press for it, as a one-off dated task rather than a yearly recurrence. Renewing
+early moves the expiry, so a recurrence would drift off the real date within one
+cycle, and automatic materialization would need a rule for finding and removing
+the reminder it had already written.
 
 The catalog is opt-in and loads from the Recipes tab — 2.2M recipes, ~2GB,
 streamed straight into Postgres by `RecipeCatalogImporter` with no key and no
