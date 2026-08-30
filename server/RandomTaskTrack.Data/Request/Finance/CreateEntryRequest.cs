@@ -8,6 +8,9 @@ public class CreateEntryRequest : AuthenticatedRequest
     /// <summary>The recurring definition this is an instance of, when it is one.</summary>
     public Guid? FlowId { get; set; }
 
+    /// <summary>Which account the money moved in or out of.</summary>
+    public Guid AccountId { get; set; }
+
     public FinanceFlowKind Kind { get; set; }
     public string Name { get; set; } = "";
     public decimal Amount { get; set; }

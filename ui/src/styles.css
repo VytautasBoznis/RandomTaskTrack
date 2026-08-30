@@ -980,3 +980,42 @@ nav.sub button.tab {
   align-items: center;
   gap: 8px;
 }
+
+/* ── Accounts ─────────────────────────────────────────────────────────────── */
+
+/* What an account holds, and whether a deposit is still in flight. Same shape
+   for both because both answer "what kind of thing is this" at a glance. */
+.kind {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  margin-left: 8px;
+  padding: 2px 8px;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+
+/* The account total beside its name in a list row. Smaller than .figure, which
+   is a tile's whole point; here the name matters as much as the number. */
+.figure-small {
+  font-size: 18px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Holdings are grouped under the account that holds them, so the heading sits
+   outside the cards rather than inside one. */
+.group-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 20px 0 8px;
+}
+
+.group-head h2 {
+  margin: 0;
+}

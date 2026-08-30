@@ -10,14 +10,15 @@ import {
   refreshPrices,
 } from '../api';
 import { useApiError } from '../hooks';
-import { CADENCE_LABELS, TradeSides } from '../types';
-import type { Cadence, Currency, Dividend, Position, Trade, TradeSide } from '../types';
+import { AccountKinds, CADENCE_LABELS, TradeSides } from '../types';
+import type { Account, Cadence, Currency, Dividend, Position, Trade, TradeSide } from '../types';
 
 const today = () => new Date().toISOString().slice(0, 10);
 
 export default function FinanceInvestments({ onUnauthorized }: { onUnauthorized: () => void }) {
   const { error, setError, fail } = useApiError(onUnauthorized);
   const [positions, setPositions] = useState<Position[] | null>(null);
+  const [accounts, setAccounts] = useState<Account[]>([]);
   const [dividends, setDividends] = useState<Dividend[]>([]);
   const [currencies, setCurrencies] = useState<Currency[]>([]);
   const [baseCurrency, setBaseCurrency] = useState('EUR');
@@ -32,6 +33,7 @@ export default function FinanceInvestments({ onUnauthorized }: { onUnauthorized:
       getFinanceOverview()
         .then((o) => {
           setPositions(o.positions);
+          setAccounts(o.accounts);
           setDividends(o.dividends);
           setCurrencies(o.currencies);
           setBaseCurrency(o.baseCurrency);
@@ -122,6 +124,15 @@ export default function FinanceInvestments({ onUnauthorized }: { onUnauthorized:
     return error ? <p className="error">{error}</p> : <p className="empty">Loading…</p>;
   }
 
+  const stockAccounts = accounts.filter((a) => a.kind === AccountKinds.Stock);
+
+  // Grouped by account rather than one flat list: the same symbol can be held
+  // in two of them, and "how much is in the pension" is the question the
+  // grouping answers.
+  const groups = accounts
+    .map((account) => ({ account, items: positions.filter((p) => p.accountId === account.id) }))
+    .filter((group) => group.items.length > 0);
+
   return (
     <>
       <div className="toolbar">
@@ -139,93 +150,111 @@ export default function FinanceInvestments({ onUnauthorized }: { onUnauthorized:
       {error && <p className="error">{error}</p>}
       {refreshNote && <p className="muted">{refreshNote}</p>}
 
-      {adding === 'holding' && (
-        <HoldingForm
-          currencies={currencies}
-          onSaved={() => {
-            setAdding(null);
-            reload();
-          }}
-          onCancel={() => setAdding(null)}
-          onError={fail}
-        />
-      )}
+      {adding === 'holding' &&
+        (stockAccounts.length === 0 ? (
+          <p className="empty">
+            Shares are held in an account. Add one on the Accounts tab, set to hold stocks, then
+            come back.
+          </p>
+        ) : (
+          <HoldingForm
+            accounts={stockAccounts}
+            currencies={currencies}
+            onSaved={() => {
+              setAdding(null);
+              reload();
+            }}
+            onCancel={() => setAdding(null)}
+            onError={fail}
+          />
+        ))}
 
       {positions.length === 0 ? (
         <p className="empty">No holdings yet.</p>
       ) : (
-        positions.map((position) => (
-          <section key={position.id} className="card">
-            <div className="note-head">
-              <h2>
-                {position.symbol}
-                {position.name !== null && <span className="muted"> · {position.name}</span>}
-              </h2>
-              <span className="actions">
-                <button type="button" onClick={() => setTradingId(position.id)}>
-                  Add trade
-                </button>
-                <button
-                  type="button"
-                  className="danger"
-                  disabled={busyId === position.id}
-                  onClick={() => onDeleteHolding(position)}
-                >
-                  Delete
-                </button>
+        groups.map((group) => (
+          <div key={group.account.id}>
+            <div className="group-head">
+              <h2>{group.account.name}</h2>
+              <span className="muted">
+                {group.account.holdingsBase.toLocaleString()} {baseCurrency}
               </span>
             </div>
 
-            <p className="notes">
-              {position.quantity.toLocaleString()} shares · cost {position.costBasis.toLocaleString()}{' '}
-              {position.currency} ·{' '}
-              {position.lastPrice === null
-                ? 'no price yet'
-                : `${position.lastPrice.toLocaleString()} ${position.currency} each`}
-              {position.marketValueBase !== null &&
-                ` · worth ${position.marketValueBase.toLocaleString()} ${baseCurrency}`}
-            </p>
+            {group.items.map((position) => (
+              <section key={position.id} className="card">
+                <div className="note-head">
+                  <h2>
+                    {position.symbol}
+                    {position.name !== null && <span className="muted"> · {position.name}</span>}
+                  </h2>
+                  <span className="actions">
+                    <button type="button" onClick={() => setTradingId(position.id)}>
+                      Add trade
+                    </button>
+                    <button
+                      type="button"
+                      className="danger"
+                      disabled={busyId === position.id}
+                      onClick={() => onDeleteHolding(position)}
+                    >
+                      Delete
+                    </button>
+                  </span>
+                </div>
 
-            {tradingId === position.id && (
-              <TradeForm
-                holdingId={position.id}
-                onSaved={() => {
-                  setTradingId(null);
-                  reload();
-                }}
-                onCancel={() => setTradingId(null)}
-                onError={fail}
-              />
-            )}
+                <p className="notes">
+                  {position.quantity.toLocaleString()} shares · cost {position.costBasis.toLocaleString()}{' '}
+                  {position.currency} ·{' '}
+                  {position.lastPrice === null
+                    ? 'no price yet'
+                    : `${position.lastPrice.toLocaleString()} ${position.currency} each`}
+                  {position.marketValueBase !== null &&
+                    ` · worth ${position.marketValueBase.toLocaleString()} ${baseCurrency}`}
+                </p>
 
-            {position.trades.length === 0 ? (
-              <p className="empty">No trades — the position is zero until you add one.</p>
-            ) : (
-              <ul>
-                {position.trades.map((trade) => (
-                  <li key={trade.id}>
-                    <span className="title">
-                      {trade.side === TradeSides.Buy ? 'Bought' : 'Sold'} {trade.quantity.toLocaleString()}
-                    </span>
-                    <span className="notes">
-                      at {trade.price.toLocaleString()} {position.currency} · {trade.tradedOn}
-                      {trade.fee > 0 && ` · fee ${trade.fee.toLocaleString()}`}
-                    </span>
-                    <span className="actions">
-                      <button
-                        type="button"
-                        className="danger"
-                        disabled={busyId === trade.id}
-                        onClick={() => onDeleteTrade(trade)}
-                      >
-                        Delete
-                      </button>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
+                {tradingId === position.id && (
+                  <TradeForm
+                    holdingId={position.id}
+                    onSaved={() => {
+                      setTradingId(null);
+                      reload();
+                    }}
+                    onCancel={() => setTradingId(null)}
+                    onError={fail}
+                  />
+                )}
+
+                {position.trades.length === 0 ? (
+                  <p className="empty">No trades — the position is zero until you add one.</p>
+                ) : (
+                  <ul>
+                    {position.trades.map((trade) => (
+                      <li key={trade.id}>
+                        <span className="title">
+                          {trade.side === TradeSides.Buy ? 'Bought' : 'Sold'} {trade.quantity.toLocaleString()}
+                        </span>
+                        <span className="notes">
+                          at {trade.price.toLocaleString()} {position.currency} · {trade.tradedOn}
+                          {trade.fee > 0 && ` · fee ${trade.fee.toLocaleString()}`}
+                        </span>
+                        <span className="actions">
+                          <button
+                            type="button"
+                            className="danger"
+                            disabled={busyId === trade.id}
+                            onClick={() => onDeleteTrade(trade)}
+                          >
+                            Delete
+                          </button>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            ))}
+          </div>
         ))
       )}
 
@@ -282,16 +311,19 @@ export default function FinanceInvestments({ onUnauthorized }: { onUnauthorized:
 }
 
 function HoldingForm({
+  accounts,
   currencies,
   onSaved,
   onCancel,
   onError,
 }: {
+  accounts: Account[];
   currencies: Currency[];
   onSaved: () => void;
   onCancel: () => void;
   onError: (e: unknown) => void;
 }) {
+  const [accountId, setAccountId] = useState(accounts[0].id);
   const [symbol, setSymbol] = useState('');
   const [name, setName] = useState('');
   const [currency, setCurrency] = useState('USD');
@@ -302,7 +334,7 @@ function HoldingForm({
     setSaving(true);
 
     try {
-      await createHolding({ symbol, name: name === '' ? null : name, currency });
+      await createHolding({ accountId, symbol, name: name === '' ? null : name, currency });
       onSaved();
     } catch (e) {
       onError(e);
@@ -314,6 +346,17 @@ function HoldingForm({
   return (
     <form className="card task-form" onSubmit={submit}>
       <div className="row">
+        <label>
+          Held in
+          <select value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+            {accounts.map((account) => (
+              <option key={account.id} value={account.id}>
+                {account.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
         <label>
           Symbol
           <input

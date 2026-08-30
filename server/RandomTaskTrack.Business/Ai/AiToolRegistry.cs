@@ -234,7 +234,7 @@ public class AiToolRegistry : IAiToolRegistry
         new()
         {
             Name = AiToolNames.QueryFinance,
-            Description = "The money picture right now: cash, deposits, holdings, net worth, the recurring flows, expected dividends and targets. Every figure is already converted to the base currency. Call this before saying anything about money.",
+            Description = "The money picture right now: the accounts and what is in each, deposits, holdings, net worth, the recurring flows, expected dividends and targets. Every base figure is already converted to the base currency. Call this before saying anything about money, and to learn the account ids the other tools take.",
             InputSchema = """
                 {"type":"object","properties":{},"additionalProperties":false}
                 """
@@ -321,7 +321,7 @@ public class AiToolRegistry : IAiToolRegistry
         new()
         {
             Name = AiToolNames.LogEntry,
-            Description = "Record money that actually moved. This is what current cash is derived from, so log real income and real expenses here rather than adjusting a balance.",
+            Description = "Record money that actually moved, in one account. This is what balances are derived from, so log real income and real expenses here rather than adjusting a total.",
             InputSchema = """
                 {
                   "type":"object",
@@ -331,6 +331,7 @@ public class AiToolRegistry : IAiToolRegistry
                     "amount":{"type":"number","description":"Positive."},
                     "currency":{"type":"string"},
                     "occurred_on":{"type":"string","description":"YYYY-MM-DD."},
+                    "account_id":{"type":"string","description":"Which account it moved in or out of, from query_finance. Optional; defaults to the first cash account."},
                     "flow_id":{"type":"string","description":"The recurring flow this was an instance of, if it was one."},
                     "category":{"type":"string"},
                     "note":{"type":"string"}
@@ -368,7 +369,8 @@ public class AiToolRegistry : IAiToolRegistry
                   "properties":{
                     "symbol":{"type":"string"},
                     "name":{"type":"string"},
-                    "currency":{"type":"string","description":"The currency the stock is quoted in, e.g. USD."}
+                    "currency":{"type":"string","description":"The currency the stock is quoted in, e.g. USD."},
+                    "account_id":{"type":"string","description":"Which brokerage holds it, from query_finance. Optional; defaults to the first stock account. The same symbol may be held in more than one."}
                   },
                   "required":["symbol","currency"],
                   "additionalProperties":false
@@ -422,7 +424,7 @@ public class AiToolRegistry : IAiToolRegistry
         new()
         {
             Name = AiToolNames.CreateDeposit,
-            Description = "Record money parked at a known interest rate. Unlike a stock the growth is contractual, so the projection values these exactly.",
+            Description = "Record money parked at a known interest rate. Unlike a stock the growth is contractual, so the projection values these exactly. Give it a source account and the deposit moves the money itself: the principal leaves that account now and principal plus interest lands in the target on the maturity date. Do not also log an entry for the transfer.",
             InputSchema = """
                 {
                   "type":"object",
@@ -434,6 +436,8 @@ public class AiToolRegistry : IAiToolRegistry
                     "compounding":{"type":"string","enum":["simple","monthly","annual"],"description":"Defaults to annual."},
                     "opened_on":{"type":"string","description":"YYYY-MM-DD."},
                     "matures_on":{"type":"string","description":"YYYY-MM-DD. Omit for an open-ended savings account."},
+                    "source_account_id":{"type":"string","description":"The account the principal comes out of, from query_finance. Omit only if the user logged the transfer as an entry themselves."},
+                    "target_account_id":{"type":"string","description":"Where it lands at maturity. Defaults to the source."},
                     "note":{"type":"string"}
                   },
                   "required":["name","principal","currency","annual_rate","opened_on"],
@@ -740,6 +744,21 @@ public class AiToolRegistry : IAiToolRegistry
             // Named so the model reports the caveat rather than the total alone.
             some_holdings_have_no_price = overview.HasUnpricedHoldings,
 
+            accounts = overview.Accounts.Select(a => new
+            {
+                id = a.Id,
+                name = a.Name,
+                kind = a.Kind.ToString().ToLowerInvariant(),
+                currency = a.Currency,
+                balance = a.Balance,
+                balance_base = a.BalanceBase,
+                holdings_base = a.HoldingsBase,
+                value_base = a.ValueBase,
+
+                // Not in the balance yet — it is still inside a deposit.
+                maturing_base = a.MaturingBase,
+                next_maturity_on = a.NextMaturityOn?.ToString("yyyy-MM-dd")
+            }),
             flows = overview.Flows.Select(f => new
             {
                 id = f.Id,
@@ -758,6 +777,7 @@ public class AiToolRegistry : IAiToolRegistry
             positions = overview.Positions.Select(p => new
             {
                 id = p.Id,
+                account_id = p.AccountId,
                 symbol = p.Symbol,
                 name = p.Name,
                 currency = p.Currency,
@@ -776,7 +796,9 @@ public class AiToolRegistry : IAiToolRegistry
                 annual_rate_pct = d.AnnualRate,
                 compounding = d.Compounding.ToString().ToLowerInvariant(),
                 opened_on = d.OpenedOn.ToString("yyyy-MM-dd"),
-                matures_on = d.MaturesOn?.ToString("yyyy-MM-dd")
+                matures_on = d.MaturesOn?.ToString("yyyy-MM-dd"),
+                source_account_id = d.SourceAccountId,
+                target_account_id = d.TargetAccountId
             }),
             dividends = overview.Dividends.Select(d => new
             {
@@ -896,6 +918,48 @@ public class AiToolRegistry : IAiToolRegistry
         return Serialize(new { deleted, id });
     }
 
+    /// <summary>
+    /// An account by id, or the first one of a kind when the model did not name
+    /// one. Entries and holdings both need an account, and for the usual
+    /// database with one current account there is only one possible answer —
+    /// making the model call query_finance first to learn it would be ceremony.
+    /// </summary>
+    private async Task<FinanceAccount> ResolveAccountAsync(
+        JsonElement input,
+        string field,
+        AccountKind fallbackKind,
+        IUnitOfWork unitOfWork)
+    {
+        if (GetString(input, field) is not null)
+        {
+            Guid id = GetRequiredGuid(input, field);
+
+            return await _financeRepository.GetAccountAsync(id, unitOfWork)
+                   ?? throw new InvalidOperationException($"No account with id {id}. Call {AiToolNames.QueryFinance} first.");
+        }
+
+        List<FinanceAccount> accounts = await _financeRepository.GetAccountsAsync(unitOfWork);
+
+        return accounts.FirstOrDefault(a => a.Kind == fallbackKind)
+               ?? throw new InvalidOperationException(
+                   $"There is no {fallbackKind.ToString().ToLowerInvariant()} account to put this in. Ask the user to add one on the Accounts tab.");
+    }
+
+    private async Task<Guid?> OptionalAccountAsync(JsonElement input, string field, IUnitOfWork unitOfWork)
+    {
+        if (GetString(input, field) is null)
+        {
+            return null;
+        }
+
+        Guid id = GetRequiredGuid(input, field);
+
+        FinanceAccount account = await _financeRepository.GetAccountAsync(id, unitOfWork)
+                                 ?? throw new InvalidOperationException($"No account with id {id}. Call {AiToolNames.QueryFinance} first.");
+
+        return account.Id;
+    }
+
     private async Task<string> LogEntryAsync(JsonElement input, IUnitOfWork unitOfWork)
     {
         Guid? flowId = null;
@@ -910,10 +974,13 @@ public class AiToolRegistry : IAiToolRegistry
             }
         }
 
+        FinanceAccount account = await ResolveAccountAsync(input, "account_id", AccountKind.Cash, unitOfWork);
+
         var entry = new LedgerEntry
         {
             Id = Guid.NewGuid(),
             FlowId = flowId,
+            AccountId = account.Id,
             Kind = ParseFlowKind(GetRequiredString(input, "kind")),
             Name = GetRequiredString(input, "name"),
             Amount = GetRequiredDecimal(input, "amount"),
@@ -930,7 +997,13 @@ public class AiToolRegistry : IAiToolRegistry
 
         await _financeRepository.CreateEntryAsync(entry, unitOfWork);
 
-        return Serialize(new { logged = true, id = entry.Id, occurred_on = entry.OccurredOn.ToString("yyyy-MM-dd") });
+        return Serialize(new
+        {
+            logged = true,
+            id = entry.Id,
+            account = account.Name,
+            occurred_on = entry.OccurredOn.ToString("yyyy-MM-dd")
+        });
     }
 
     private async Task<string> QueryEntriesAsync(JsonElement input, IUnitOfWork unitOfWork)
@@ -963,14 +1036,17 @@ public class AiToolRegistry : IAiToolRegistry
     {
         string symbol = GetRequiredString(input, "symbol").Trim();
 
-        if (await _financeRepository.GetHoldingBySymbolAsync(symbol, unitOfWork) is not null)
+        FinanceAccount account = await ResolveAccountAsync(input, "account_id", AccountKind.Stock, unitOfWork);
+
+        if (await _financeRepository.GetHoldingBySymbolAsync(account.Id, symbol, unitOfWork) is not null)
         {
-            throw new InvalidOperationException($"{symbol} is already tracked. Use log_trade to add shares to it.");
+            throw new InvalidOperationException($"{account.Name} already holds {symbol}. Use log_trade to add shares to it.");
         }
 
         var holding = new Holding
         {
             Id = Guid.NewGuid(),
+            AccountId = account.Id,
             Symbol = symbol,
             Name = GetString(input, "name"),
             Currency = await ResolveCurrencyAsync(GetRequiredString(input, "currency"), unitOfWork)
@@ -978,7 +1054,7 @@ public class AiToolRegistry : IAiToolRegistry
 
         await _financeRepository.CreateHoldingAsync(holding, unitOfWork);
 
-        return Serialize(new { created = true, id = holding.Id, symbol = holding.Symbol });
+        return Serialize(new { created = true, id = holding.Id, symbol = holding.Symbol, account = account.Name });
     }
 
     private async Task<string> LogTradeAsync(JsonElement input, IUnitOfWork unitOfWork)
@@ -1048,6 +1124,18 @@ public class AiToolRegistry : IAiToolRegistry
 
     private async Task<string> CreateDepositAsync(JsonElement input, IUnitOfWork unitOfWork)
     {
+        // Both optional. Naming a source means the deposit takes the principal
+        // out of that account by itself; leaving it unset records a deposit
+        // whose transfer the user logged as an entry. The target falls back to
+        // the source so money never leaves with nowhere to return to.
+        Guid? source = await OptionalAccountAsync(input, "source_account_id", unitOfWork);
+        Guid? target = await OptionalAccountAsync(input, "target_account_id", unitOfWork) ?? source;
+
+        if (source is null && target is not null)
+        {
+            throw new InvalidOperationException("A deposit that lands somewhere has to come from somewhere: set source_account_id too.");
+        }
+
         var deposit = new Deposit
         {
             Id = Guid.NewGuid(),
@@ -1058,6 +1146,8 @@ public class AiToolRegistry : IAiToolRegistry
             Compounding = ParseCompounding(GetString(input, "compounding")),
             OpenedOn = GetDate(input, "opened_on") ?? throw new InvalidOperationException("opened_on is required (YYYY-MM-DD)."),
             MaturesOn = GetDate(input, "matures_on"),
+            SourceAccountId = source,
+            TargetAccountId = target,
             Note = GetString(input, "note")
         };
 

@@ -17,6 +17,9 @@ public class LedgerEntry
     /// </summary>
     public Guid? FlowId { get; set; }
 
+    /// <summary>Which pot it moved in or out of. Every entry has one.</summary>
+    public Guid AccountId { get; set; }
+
     public FinanceFlowKind Kind { get; set; }
     public string Name { get; set; } = "";
     public decimal Amount { get; set; }

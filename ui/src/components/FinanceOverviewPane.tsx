@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { getFinanceOverview, getProjection } from '../api';
 import { useApiError } from '../hooks';
 import { CashFlowChart, NetWorthChart, ProjectionTable } from './FinanceCharts';
+import { ACCOUNT_KIND_LABELS } from '../types';
 import type { FinanceOverview, ProjectionPoint } from '../types';
 
 const HORIZONS = [
@@ -110,7 +111,10 @@ export default function FinanceOverviewPane({ onUnauthorized }: { onUnauthorized
         <section className="card tile">
           <h2>Cash</h2>
           <p className="figure">{money(overview.cashBase)}</p>
-          <p className="muted">From the ledger, not typed in.</p>
+          <p className="muted">
+            Across {overview.accounts.length} account{overview.accounts.length === 1 ? '' : 's'},
+            from the ledger.
+          </p>
         </section>
 
         <section className="card tile">
@@ -131,6 +135,33 @@ export default function FinanceOverviewPane({ onUnauthorized }: { onUnauthorized
           </p>
         </section>
       </div>
+
+      {/* What is in each pot, on the screen that gets looked at. Editing them
+          lives on the Accounts tab; this is the read. */}
+      {overview.accounts.length > 0 && (
+        <section className="card">
+          <h2>Accounts</h2>
+          <ul>
+            {overview.accounts.map((account) => (
+              <li key={account.id}>
+                <span className="title">
+                  {account.name}
+                  <span className="kind">{ACCOUNT_KIND_LABELS[account.kind]}</span>
+                </span>
+                <span className="notes">
+                  {account.holdingsBase !== 0 &&
+                    `${money(account.balanceBase)} cash · ${money(account.holdingsBase)} in shares`}
+                  {account.maturingBase !== 0 &&
+                    ` · ${money(account.maturingBase)} maturing${
+                      account.nextMaturityOn === null ? '' : ` ${account.nextMaturityOn}`
+                    }`}
+                </span>
+                <span className="figure-small">{money(account.valueBase)}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section className="card">
         <h2>Net worth, projected</h2>

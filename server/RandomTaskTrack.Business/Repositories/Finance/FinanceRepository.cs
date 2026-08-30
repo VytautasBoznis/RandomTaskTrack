@@ -9,14 +9,17 @@ namespace RandomTaskTrack.Business.Repositories.Finance;
 /// <inheritdoc cref="IFinanceRepository"/>
 public class FinanceRepository : IFinanceRepository
 {
+    private const string AccountColumns =
+        "id, name, kind, currency, note, created_at, updated_at";
+
     private const string FlowColumns =
         "id, kind, name, amount, currency, cadence, day_of_month, month_of_year, starts_on, ends_on, category, is_active, created_at, updated_at";
 
     private const string EntryColumns =
-        "id, flow_id, kind, name, amount, currency, occurred_on, category, note, created_at";
+        "id, flow_id, account_id, kind, name, amount, currency, occurred_on, category, note, created_at";
 
     private const string HoldingColumns =
-        "id, symbol, name, currency, last_price, last_price_at, created_at";
+        "id, account_id, symbol, name, currency, last_price, last_price_at, created_at";
 
     private const string TradeColumns =
         "id, holding_id, side, quantity, price, fee, traded_on, note, created_at";
@@ -25,10 +28,93 @@ public class FinanceRepository : IFinanceRepository
         "id, holding_id, name, amount, currency, cadence, day_of_month, month_of_year, starts_on, ends_on, is_active, created_at, updated_at";
 
     private const string DepositColumns =
-        "id, name, principal, currency, annual_rate, compounding, opened_on, matures_on, note, created_at, updated_at";
+        "id, name, principal, currency, annual_rate, compounding, opened_on, matures_on, source_account_id, target_account_id, note, created_at, updated_at";
 
     private const string TargetColumns =
         "id, label, target_on, amount, note, created_at";
+
+    // ── Accounts ─────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Cash accounts before brokerages, then by name. That is the order the
+    /// dropdowns and the cards use, and "which one is my current account" is
+    /// answered by it being at the top.
+    /// </summary>
+    public async Task<List<FinanceAccount>> GetAccountsAsync(IUnitOfWork unitOfWork)
+    {
+        var rows = await unitOfWork.Connection.QueryAsync<FinanceAccount>(
+            $@"SELECT {AccountColumns}
+               FROM tracker.fin_accounts
+               ORDER BY kind, name",
+            transaction: unitOfWork.Transaction);
+
+        return rows.ToList();
+    }
+
+    public async Task<FinanceAccount?> GetAccountAsync(Guid id, IUnitOfWork unitOfWork)
+    {
+        return await unitOfWork.Connection.QueryFirstOrDefaultAsync<FinanceAccount>(
+            $"SELECT {AccountColumns} FROM tracker.fin_accounts WHERE id = @id",
+            new { id },
+            unitOfWork.Transaction);
+    }
+
+    public async Task<FinanceAccount?> GetAccountByNameAsync(string name, IUnitOfWork unitOfWork)
+    {
+        return await unitOfWork.Connection.QueryFirstOrDefaultAsync<FinanceAccount>(
+            $"SELECT {AccountColumns} FROM tracker.fin_accounts WHERE lower(name) = lower(@name)",
+            new { name },
+            unitOfWork.Transaction);
+    }
+
+    public async Task CreateAccountAsync(FinanceAccount account, IUnitOfWork unitOfWork)
+    {
+        await unitOfWork.Connection.ExecuteAsync(
+            @"INSERT INTO tracker.fin_accounts (id, name, kind, currency, note)
+              VALUES (@Id, @Name, @Kind, @Currency, @Note)",
+            new { account.Id, account.Name, Kind = (int)account.Kind, account.Currency, account.Note },
+            unitOfWork.Transaction);
+    }
+
+    public async Task UpdateAccountAsync(FinanceAccount account, IUnitOfWork unitOfWork)
+    {
+        await unitOfWork.Connection.ExecuteAsync(
+            @"UPDATE tracker.fin_accounts
+              SET name       = @Name,
+                  kind       = @Kind,
+                  currency   = @Currency,
+                  note       = @Note,
+                  updated_at = now()
+              WHERE id = @Id",
+            new { account.Id, account.Name, Kind = (int)account.Kind, account.Currency, account.Note },
+            unitOfWork.Transaction);
+    }
+
+    public async Task<bool> DeleteAccountAsync(Guid id, IUnitOfWork unitOfWork)
+    {
+        int affected = await unitOfWork.Connection.ExecuteAsync(
+            "DELETE FROM tracker.fin_accounts WHERE id = @id",
+            new { id },
+            unitOfWork.Transaction);
+
+        return affected > 0;
+    }
+
+    /// <summary>
+    /// What is still attached to an account. The foreign keys already refuse
+    /// the delete, but they refuse it as a constraint name — this is what lets
+    /// the operation say "3 entries and 2 holdings" instead.
+    /// </summary>
+    public async Task<int> CountAccountUsesAsync(Guid id, IUnitOfWork unitOfWork)
+    {
+        return await unitOfWork.Connection.ExecuteScalarAsync<int>(
+            @"SELECT (SELECT count(*) FROM tracker.fin_entries  WHERE account_id = @id)
+                   + (SELECT count(*) FROM tracker.fin_holdings WHERE account_id = @id)
+                   + (SELECT count(*) FROM tracker.fin_deposits
+                      WHERE source_account_id = @id OR target_account_id = @id)",
+            new { id },
+            unitOfWork.Transaction);
+    }
 
     // ── Currencies ───────────────────────────────────────────────────────────
 
@@ -191,12 +277,13 @@ public class FinanceRepository : IFinanceRepository
     {
         await unitOfWork.Connection.ExecuteAsync(
             @"INSERT INTO tracker.fin_entries
-                  (id, flow_id, kind, name, amount, currency, occurred_on, category, note)
-              VALUES (@Id, @FlowId, @Kind, @Name, @Amount, @Currency, @OccurredOn, @Category, @Note)",
+                  (id, flow_id, account_id, kind, name, amount, currency, occurred_on, category, note)
+              VALUES (@Id, @FlowId, @AccountId, @Kind, @Name, @Amount, @Currency, @OccurredOn, @Category, @Note)",
             new
             {
                 entry.Id,
                 entry.FlowId,
+                entry.AccountId,
                 Kind = (int)entry.Kind,
                 entry.Name,
                 entry.Amount,
@@ -212,7 +299,8 @@ public class FinanceRepository : IFinanceRepository
     {
         await unitOfWork.Connection.ExecuteAsync(
             @"UPDATE tracker.fin_entries
-              SET name        = @Name,
+              SET account_id  = @AccountId,
+                  name        = @Name,
                   amount      = @Amount,
                   currency    = @Currency,
                   occurred_on = @OccurredOn,
@@ -222,6 +310,7 @@ public class FinanceRepository : IFinanceRepository
             new
             {
                 entry.Id,
+                entry.AccountId,
                 entry.Name,
                 entry.Amount,
                 entry.Currency,
@@ -242,15 +331,16 @@ public class FinanceRepository : IFinanceRepository
         return affected > 0;
     }
 
-    public async Task<List<CurrencyAmount>> GetCashByCurrencyAsync(IUnitOfWork unitOfWork)
+    public async Task<List<AccountCash>> GetCashByAccountAsync(IUnitOfWork unitOfWork)
     {
         // kind 1 is income, 2 is expense. Signing here rather than in C# keeps
         // the whole ledger out of memory — it only ever grows.
-        var rows = await unitOfWork.Connection.QueryAsync<CurrencyAmount>(
-            @"SELECT currency,
+        var rows = await unitOfWork.Connection.QueryAsync<AccountCash>(
+            @"SELECT account_id,
+                     currency,
                      SUM(CASE WHEN kind = 1 THEN amount ELSE -amount END) AS amount
               FROM tracker.fin_entries
-              GROUP BY currency",
+              GROUP BY account_id, currency",
             transaction: unitOfWork.Transaction);
 
         return rows.ToList();
@@ -294,20 +384,26 @@ public class FinanceRepository : IFinanceRepository
             unitOfWork.Transaction);
     }
 
-    public async Task<Holding?> GetHoldingBySymbolAsync(string symbol, IUnitOfWork unitOfWork)
+    /// <summary>
+    /// Scoped to one account, because the symbol is only unique within one —
+    /// the same ETF in a taxable account and a pension is two holdings.
+    /// </summary>
+    public async Task<Holding?> GetHoldingBySymbolAsync(Guid accountId, string symbol, IUnitOfWork unitOfWork)
     {
         return await unitOfWork.Connection.QueryFirstOrDefaultAsync<Holding>(
-            $"SELECT {HoldingColumns} FROM tracker.fin_holdings WHERE lower(symbol) = lower(@symbol)",
-            new { symbol },
+            $@"SELECT {HoldingColumns}
+               FROM tracker.fin_holdings
+               WHERE account_id = @accountId AND lower(symbol) = lower(@symbol)",
+            new { accountId, symbol },
             unitOfWork.Transaction);
     }
 
     public async Task CreateHoldingAsync(Holding holding, IUnitOfWork unitOfWork)
     {
         await unitOfWork.Connection.ExecuteAsync(
-            @"INSERT INTO tracker.fin_holdings (id, symbol, name, currency)
-              VALUES (@Id, @Symbol, @Name, @Currency)",
-            new { holding.Id, holding.Symbol, holding.Name, holding.Currency },
+            @"INSERT INTO tracker.fin_holdings (id, account_id, symbol, name, currency)
+              VALUES (@Id, @AccountId, @Symbol, @Name, @Currency)",
+            new { holding.Id, holding.AccountId, holding.Symbol, holding.Name, holding.Currency },
             unitOfWork.Transaction);
     }
 
@@ -315,22 +411,27 @@ public class FinanceRepository : IFinanceRepository
     {
         await unitOfWork.Connection.ExecuteAsync(
             @"UPDATE tracker.fin_holdings
-              SET symbol   = @Symbol,
-                  name     = @Name,
-                  currency = @Currency
+              SET account_id = @AccountId,
+                  symbol     = @Symbol,
+                  name       = @Name,
+                  currency   = @Currency
               WHERE id = @Id",
-            new { holding.Id, holding.Symbol, holding.Name, holding.Currency },
+            new { holding.Id, holding.AccountId, holding.Symbol, holding.Name, holding.Currency },
             unitOfWork.Transaction);
     }
 
-    public async Task UpdateHoldingPriceAsync(Guid id, decimal price, DateTime asOf, IUnitOfWork unitOfWork)
+    /// <summary>
+    /// By symbol, not by id: one quote answers for every account holding it, so
+    /// the refresh asks the source once and writes the price to all of them.
+    /// </summary>
+    public async Task<int> UpdatePricesBySymbolAsync(string symbol, decimal price, DateTime asOf, IUnitOfWork unitOfWork)
     {
-        await unitOfWork.Connection.ExecuteAsync(
+        return await unitOfWork.Connection.ExecuteAsync(
             @"UPDATE tracker.fin_holdings
               SET last_price    = @price,
                   last_price_at = @asOf
-              WHERE id = @id",
-            new { id, price, asOf },
+              WHERE lower(symbol) = lower(@symbol)",
+            new { symbol, price, asOf },
             unitOfWork.Transaction);
     }
 
@@ -518,8 +619,10 @@ public class FinanceRepository : IFinanceRepository
     {
         await unitOfWork.Connection.ExecuteAsync(
             @"INSERT INTO tracker.fin_deposits
-                  (id, name, principal, currency, annual_rate, compounding, opened_on, matures_on, note)
-              VALUES (@Id, @Name, @Principal, @Currency, @AnnualRate, @Compounding, @OpenedOn, @MaturesOn, @Note)",
+                  (id, name, principal, currency, annual_rate, compounding, opened_on, matures_on,
+                   source_account_id, target_account_id, note)
+              VALUES (@Id, @Name, @Principal, @Currency, @AnnualRate, @Compounding, @OpenedOn, @MaturesOn,
+                      @SourceAccountId, @TargetAccountId, @Note)",
             ToDepositParameters(deposit),
             unitOfWork.Transaction);
     }
@@ -535,6 +638,8 @@ public class FinanceRepository : IFinanceRepository
                   compounding = @Compounding,
                   opened_on   = @OpenedOn,
                   matures_on  = @MaturesOn,
+                  source_account_id = @SourceAccountId,
+                  target_account_id = @TargetAccountId,
                   note        = @Note,
                   updated_at  = now()
               WHERE id = @Id",
@@ -562,6 +667,8 @@ public class FinanceRepository : IFinanceRepository
         Compounding = (int)deposit.Compounding,
         deposit.OpenedOn,
         deposit.MaturesOn,
+        deposit.SourceAccountId,
+        deposit.TargetAccountId,
         deposit.Note
     };
 

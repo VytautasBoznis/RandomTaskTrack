@@ -26,6 +26,9 @@ public static class ExceptionCodes
     public const string PLANT_NOT_FOUND = "PLANT_NOT_FOUND";
     public const string PLANT_RESEARCH_FAILED = "PLANT_RESEARCH_FAILED";
 
+    public const string FINANCE_ACCOUNT_NOT_FOUND = "FINANCE_ACCOUNT_NOT_FOUND";
+    public const string FINANCE_ACCOUNT_NAME_EXISTS = "FINANCE_ACCOUNT_NAME_EXISTS";
+    public const string FINANCE_ACCOUNT_IN_USE = "FINANCE_ACCOUNT_IN_USE";
     public const string FINANCE_FLOW_NOT_FOUND = "FINANCE_FLOW_NOT_FOUND";
     public const string FINANCE_ENTRY_NOT_FOUND = "FINANCE_ENTRY_NOT_FOUND";
     public const string FINANCE_HOLDING_NOT_FOUND = "FINANCE_HOLDING_NOT_FOUND";

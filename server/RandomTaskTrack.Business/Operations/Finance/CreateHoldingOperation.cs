@@ -31,13 +31,16 @@ public class CreateHoldingOperation : BaseOperation<CreateHoldingRequest, Create
     {
         string symbol = request.Symbol.Trim();
 
-        // ux_fin_holdings_symbol would catch this, but as a constraint name
-        // rather than a sentence — and adding a symbol you already hold is an
-        // ordinary mistake, not an exceptional one.
-        if (await _financeRepository.GetHoldingBySymbolAsync(symbol, unitOfWork) is not null)
+        FinanceAccount account = await FinanceGuards.ResolveAccountAsync(request.AccountId, _financeRepository, unitOfWork);
+
+        // Per account, not globally: the same ETF in a brokerage and a pension
+        // is two holdings. ux_fin_holdings_account_symbol would catch a repeat
+        // within one account, but as a constraint name rather than a sentence —
+        // and adding a symbol you already hold there is an ordinary mistake.
+        if (await _financeRepository.GetHoldingBySymbolAsync(account.Id, symbol, unitOfWork) is not null)
         {
             throw new BadRequestException(
-                $"You already hold {symbol}.",
+                $"{account.Name} already holds {symbol}.",
                 ExceptionCodes.FINANCE_SYMBOL_EXISTS,
                 "Add a trade to the existing holding instead.");
         }
@@ -45,6 +48,7 @@ public class CreateHoldingOperation : BaseOperation<CreateHoldingRequest, Create
         var holding = new Holding
         {
             Id = Guid.NewGuid(),
+            AccountId = account.Id,
             Symbol = symbol,
             Name = request.Name,
             Currency = await FinanceGuards.ResolveCurrencyAsync(request.Currency, _financeRepository, unitOfWork)

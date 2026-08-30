@@ -13,5 +13,7 @@ public class UpdateDepositRequest : AuthenticatedRequest
     public DepositCompounding? Compounding { get; set; }
     public DateOnly? OpenedOn { get; set; }
     public DateOnly? MaturesOn { get; set; }
+    public Guid? SourceAccountId { get; set; }
+    public Guid? TargetAccountId { get; set; }
     public string? Note { get; set; }
 }

@@ -10,6 +10,10 @@ namespace RandomTaskTrack.Data.Dtos.Finance;
 public class PositionDto
 {
     public Guid Id { get; set; }
+
+    /// <summary>The account the shares sit in — positions group under it.</summary>
+    public Guid AccountId { get; set; }
+
     public string Symbol { get; set; } = "";
     public string? Name { get; set; }
     public string Currency { get; set; } = "";

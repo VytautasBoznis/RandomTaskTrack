@@ -25,6 +25,12 @@ namespace RandomTaskTrack.Business.Services;
 /// later months apply the flow definitions. That is also what stops this month
 /// being counted twice — the rent already paid is in the cash balance, and the
 /// projection does not add it again.
+///
+/// <b>Balances are derived, never stored.</b> An account's balance is its
+/// entries plus the money its deposits have moved: principal out while a
+/// deposit is open, principal and interest back in once it has matured. Both
+/// halves are computed here rather than written as rows, so nothing has to run
+/// on a maturity date and deleting a deposit undoes both.
 /// </remarks>
 public class FinanceProjector : IFinanceProjector
 {
@@ -48,8 +54,11 @@ public class FinanceProjector : IFinanceProjector
         DateOnly today = _clock.Today;
 
         List<PositionDto> positions = BuildPositions(data);
+        List<AccountDto> accounts = BuildAccounts(data, today, positions);
 
-        decimal cash = data.Cash.Sum(c => ToBase(c.Amount, c.Currency, data));
+        // Summed from the account cards rather than from the ledger directly,
+        // so the tile and the cards under it can never disagree by a cent.
+        decimal cash = accounts.Sum(a => a.BalanceBase);
         decimal deposits = StillHeld(data.Deposits, today).Sum(d => ToBase(ValueAt(d, today), d.Currency, data));
         decimal stocks = positions.Sum(p => p.MarketValueBase ?? 0m);
 
@@ -74,6 +83,7 @@ public class FinanceProjector : IFinanceProjector
             // that is wrong by an unknown amount.
             HasUnpricedHoldings = positions.Any(p => p.Quantity > 0 && p.LastPrice is null),
 
+            Accounts = accounts,
             Flows = data.Flows,
             Positions = positions,
             Deposits = data.Deposits,
@@ -125,7 +135,7 @@ public class FinanceProjector : IFinanceProjector
         // why the loop below starts applying flows at the *next* month.
         List<PositionDto> positions = BuildPositions(data);
 
-        decimal cash = data.Cash.Sum(c => ToBase(c.Amount, c.Currency, data));
+        decimal cash = BuildAccounts(data, today, positions).Sum(a => a.BalanceBase);
         decimal stocksNow = positions.Sum(p => p.MarketValueBase ?? 0m);
 
         decimal monthToDateIncome = actuals.Where(a => a.Month == thisMonth).Sum(a => ToBase(a.Income, a.Currency, data));
@@ -190,14 +200,30 @@ public class FinanceProjector : IFinanceProjector
                 }
             }
 
+            // The first bucket reaches back to the day after today rather than
+            // to its own first, because the anchor above only counts deposits
+            // that have already opened or matured. Without the overlap, one
+            // maturing on the 28th when today is the 15th falls into the gap
+            // between the two and leaves the projection for good.
+            DateOnly windowFrom = i == 1 ? today.AddDays(1) : month;
+
             // A deposit maturing is the one moment its money crosses back into
             // cash. Only future maturities count: a deposit that matured before
             // today is already in the balance.
             decimal maturing = data.Deposits
-                .Where(d => d.MaturesOn.HasValue && d.MaturesOn.Value >= month && d.MaturesOn.Value <= monthEnd)
+                .Where(d => d.MaturesOn.HasValue && d.MaturesOn.Value >= windowFrom && d.MaturesOn.Value <= monthEnd)
                 .Sum(d => ToBase(ValueAt(d, d.MaturesOn!.Value), d.Currency, data));
 
-            runningCash += income - expenses + maturing;
+            // And a deposit opening is the mirror of it: the principal leaves
+            // the source account on the day it opens. Only deposits that name
+            // a source move themselves — ones opened before accounts existed
+            // had their transfer logged by hand, and taking it out again here
+            // would charge for it twice.
+            decimal locking = data.Deposits
+                .Where(d => d.SourceAccountId.HasValue && d.OpenedOn >= windowFrom && d.OpenedOn <= monthEnd)
+                .Sum(d => ToBase(d.Principal, d.Currency, data));
+
+            runningCash += income - expenses + maturing - locking;
 
             decimal deposits = StillHeld(data.Deposits, monthEnd)
                 .Sum(d => ToBase(ValueAt(d, monthEnd), d.Currency, data));
@@ -222,6 +248,74 @@ public class FinanceProjector : IFinanceProjector
         }
 
         return points;
+    }
+
+    // ── Accounts ─────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Every account with what is sitting in it. Nothing here is read from a
+    /// column: the balance is the account's entries plus what its deposits have
+    /// moved, which is why "set the balance to 4,180" is an adjustment entry
+    /// and not an UPDATE.
+    /// </summary>
+    private List<AccountDto> BuildAccounts(FinanceData data, DateOnly today, List<PositionDto> positions)
+    {
+        var accounts = new List<AccountDto>();
+
+        foreach (FinanceAccount account in data.Accounts)
+        {
+            decimal balance = data.Cash
+                                  .Where(c => c.AccountId == account.Id)
+                                  .Sum(c => ToBase(c.Amount, c.Currency, data))
+                              + DepositMovement(account.Id, today, data);
+
+            decimal holdings = positions
+                .Where(p => p.AccountId == account.Id)
+                .Sum(p => p.MarketValueBase ?? 0m);
+
+            // Still in the deposit, not in the account — so it is reported
+            // beside the balance rather than added to it.
+            List<Deposit> incoming = data.Deposits
+                .Where(d => d.TargetAccountId == account.Id && d.MaturesOn.HasValue && d.MaturesOn.Value > today)
+                .ToList();
+
+            accounts.Add(new AccountDto
+            {
+                Id = account.Id,
+                Name = account.Name,
+                Kind = account.Kind,
+                Currency = account.Currency,
+                Note = account.Note,
+                Balance = Round(FromBase(balance, account.Currency, data)),
+                BalanceBase = Round(balance),
+                HoldingsBase = Round(holdings),
+                ValueBase = Round(balance) + Round(holdings),
+                MaturingBase = Round(incoming.Sum(d => ToBase(ValueAt(d, d.MaturesOn!.Value), d.Currency, data))),
+                NextMaturityOn = incoming.Count == 0 ? null : incoming.Min(d => d.MaturesOn!.Value)
+            });
+        }
+
+        return accounts;
+    }
+
+    /// <summary>
+    /// What the deposits have done to one account's balance by a given date:
+    /// principal out of the source from the day it opened, principal plus
+    /// interest into the target from the day it matured. A deposit with neither
+    /// account set moves nothing — it predates accounts, and its transfer is
+    /// already a hand-logged entry.
+    /// </summary>
+    private static decimal DepositMovement(Guid accountId, DateOnly on, FinanceData data)
+    {
+        decimal out_ = data.Deposits
+            .Where(d => d.SourceAccountId == accountId && d.OpenedOn <= on)
+            .Sum(d => ToBase(d.Principal, d.Currency, data));
+
+        decimal back = data.Deposits
+            .Where(d => d.TargetAccountId == accountId && d.MaturesOn.HasValue && d.MaturesOn.Value <= on)
+            .Sum(d => ToBase(ValueAt(d, d.MaturesOn!.Value), d.Currency, data));
+
+        return back - out_;
     }
 
     // ── Positions ────────────────────────────────────────────────────────────
@@ -254,6 +348,7 @@ public class FinanceProjector : IFinanceProjector
             positions.Add(new PositionDto
             {
                 Id = holding.Id,
+                AccountId = holding.AccountId,
                 Symbol = holding.Symbol,
                 Name = holding.Name,
                 Currency = holding.Currency,
@@ -422,6 +517,17 @@ public class FinanceProjector : IFinanceProjector
         return rate is null || rate.RateToBase == 0 ? amount : amount / rate.RateToBase;
     }
 
+    /// <summary>
+    /// Back the other way, for an account quoted in something other than the
+    /// base. Multiply, since rate_to_base is units per base unit.
+    /// </summary>
+    private static decimal FromBase(decimal amount, string currency, FinanceData data)
+    {
+        Currency? rate = data.Currencies.FirstOrDefault(c => string.Equals(c.Code, currency, StringComparison.OrdinalIgnoreCase));
+
+        return rate is null ? amount : amount * rate.RateToBase;
+    }
+
     private static decimal Round(decimal value) => Math.Round(value, 2, MidpointRounding.AwayFromZero);
 
     // ── Loading ──────────────────────────────────────────────────────────────
@@ -433,9 +539,10 @@ public class FinanceProjector : IFinanceProjector
     /// </summary>
     private async Task<FinanceData> LoadAsync(IUnitOfWork unitOfWork) => new()
     {
+        Accounts = await _repository.GetAccountsAsync(unitOfWork),
         Currencies = await _repository.GetCurrenciesAsync(unitOfWork),
         Flows = await _repository.GetFlowsAsync(true, unitOfWork),
-        Cash = await _repository.GetCashByCurrencyAsync(unitOfWork),
+        Cash = await _repository.GetCashByAccountAsync(unitOfWork),
         Holdings = await _repository.GetHoldingsAsync(unitOfWork),
         Trades = await _repository.GetTradesAsync(unitOfWork),
         Dividends = await _repository.GetDividendsAsync(true, unitOfWork),
@@ -445,9 +552,10 @@ public class FinanceProjector : IFinanceProjector
 
     private class FinanceData
     {
+        public List<FinanceAccount> Accounts { get; init; } = new();
         public List<Currency> Currencies { get; init; } = new();
         public List<FinanceFlow> Flows { get; init; } = new();
-        public List<CurrencyAmount> Cash { get; init; } = new();
+        public List<AccountCash> Cash { get; init; } = new();
         public List<Holding> Holdings { get; init; } = new();
         public List<Trade> Trades { get; init; } = new();
         public List<Dividend> Dividends { get; init; } = new();

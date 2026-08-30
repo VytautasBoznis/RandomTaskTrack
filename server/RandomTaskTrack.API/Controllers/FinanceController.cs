@@ -59,6 +59,46 @@ public class FinanceController : BaseController
         return Ok(await _operationFactory.Get<RefreshPricesOperation>().Run(request));
     }
 
+    // ── Accounts ─────────────────────────────────────────────────────────────
+
+    [HttpPost("accounts")]
+    public async Task<IActionResult> CreateAccount(CreateAccountRequest request)
+    {
+        request.SessionUserData = GetSessionModelFromJwt();
+
+        return Ok(await _operationFactory.Get<CreateAccountOperation>().Run(request));
+    }
+
+    [HttpPut("accounts/{id:guid}")]
+    public async Task<IActionResult> UpdateAccount(Guid id, UpdateAccountRequest request)
+    {
+        request.Id = id;
+        request.SessionUserData = GetSessionModelFromJwt();
+
+        return Ok(await _operationFactory.Get<UpdateAccountOperation>().Run(request));
+    }
+
+    [HttpDelete("accounts/{id:guid}")]
+    public async Task<IActionResult> DeleteAccount(Guid id)
+    {
+        var request = new DeleteAccountRequest { Id = id, SessionUserData = GetSessionModelFromJwt() };
+
+        return Ok(await _operationFactory.Get<DeleteAccountOperation>().Run(request));
+    }
+
+    /// <summary>
+    /// Types the balance you can see and logs the difference. The balance
+    /// itself is not stored — see <see cref="SetAccountBalanceOperation"/>.
+    /// </summary>
+    [HttpPost("accounts/{id:guid}/balance")]
+    public async Task<IActionResult> SetAccountBalance(Guid id, SetAccountBalanceRequest request)
+    {
+        request.Id = id;
+        request.SessionUserData = GetSessionModelFromJwt();
+
+        return Ok(await _operationFactory.Get<SetAccountBalanceOperation>().Run(request));
+    }
+
     // ── Flows ────────────────────────────────────────────────────────────────
 
     [HttpPost("flows")]

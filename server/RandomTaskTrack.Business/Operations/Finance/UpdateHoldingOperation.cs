@@ -34,15 +34,23 @@ public class UpdateHoldingOperation : BaseOperation<UpdateHoldingRequest, Update
 
         holding.Name = request.Name ?? holding.Name;
 
-        if (request.Symbol is not null)
+        // Before the clash check below, because moving a holding into an
+        // account that already holds the symbol is exactly the collision it is
+        // there to catch.
+        if (request.AccountId.HasValue)
         {
-            string symbol = request.Symbol.Trim();
-            Holding? clash = await _financeRepository.GetHoldingBySymbolAsync(symbol, unitOfWork);
+            holding.AccountId = (await FinanceGuards.ResolveAccountAsync(request.AccountId.Value, _financeRepository, unitOfWork)).Id;
+        }
+
+        if (request.Symbol is not null || request.AccountId.HasValue)
+        {
+            string symbol = request.Symbol?.Trim() ?? holding.Symbol;
+            Holding? clash = await _financeRepository.GetHoldingBySymbolAsync(holding.AccountId, symbol, unitOfWork);
 
             if (clash is not null && clash.Id != holding.Id)
             {
                 throw new BadRequestException(
-                    $"You already hold {symbol}.",
+                    $"That account already holds {symbol}.",
                     ExceptionCodes.FINANCE_SYMBOL_EXISTS);
             }
 

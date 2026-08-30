@@ -40,10 +40,13 @@ public class CreateEntryOperation : BaseOperation<CreateEntryRequest, CreateEntr
             throw new NotFoundException("Flow not found", ExceptionCodes.FINANCE_FLOW_NOT_FOUND);
         }
 
+        FinanceAccount account = await FinanceGuards.ResolveAccountAsync(request.AccountId, _financeRepository, unitOfWork);
+
         var entry = new LedgerEntry
         {
             Id = Guid.NewGuid(),
             FlowId = request.FlowId,
+            AccountId = account.Id,
             Kind = request.Kind,
             Name = request.Name,
             Amount = request.Amount,

@@ -427,11 +427,54 @@ export const COMPOUNDING_LABELS: Record<Compounding, string> = {
   3: 'Annual',
 };
 
+/** AccountKind: 1 Cash (a bank account), 2 Stock (a brokerage or pension). */
+export type AccountKind = 1 | 2;
+
+export const AccountKinds = { Cash: 1, Stock: 2 } as const;
+
+export const ACCOUNT_KIND_LABELS: Record<AccountKind, string> = {
+  1: 'Cash',
+  2: 'Stocks',
+};
+
 export interface Currency {
   code: string;
   name: string;
   rateToBase: number;
   updatedAt: string;
+}
+
+/** The stored row. The overview returns {@link Account} instead — balance folded in. */
+export interface FinanceAccount {
+  id: string;
+  name: string;
+  kind: AccountKind;
+  currency: string;
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * An account with what is in it. Nothing here is stored — the balance is the
+ * ledger plus what the deposits moved — which is why setting it writes an
+ * adjustment entry rather than a number.
+ */
+export interface Account {
+  id: string;
+  name: string;
+  kind: AccountKind;
+  currency: string;
+  note: string | null;
+  /** In the account's own currency: what the bank app would say. */
+  balance: number;
+  balanceBase: number;
+  /** Market value of the positions held here. Zero for a bank account. */
+  holdingsBase: number;
+  valueBase: number;
+  /** On its way back from a deposit — not in the balance yet. */
+  maturingBase: number;
+  nextMaturityOn: string | null;
 }
 
 export interface FinanceFlow {
@@ -454,6 +497,7 @@ export interface FinanceFlow {
 export interface LedgerEntry {
   id: string;
   flowId: string | null;
+  accountId: string;
   kind: FlowKind;
   name: string;
   amount: number;
@@ -479,6 +523,7 @@ export interface Trade {
 /** The stored row. The overview returns {@link Position} instead — trades folded in. */
 export interface Holding {
   id: string;
+  accountId: string;
   symbol: string;
   name: string | null;
   currency: string;
@@ -489,6 +534,7 @@ export interface Holding {
 
 export interface Position {
   id: string;
+  accountId: string;
   symbol: string;
   name: string | null;
   currency: string;
@@ -527,6 +573,10 @@ export interface Deposit {
   compounding: Compounding;
   openedOn: string;
   maturesOn: string | null;
+  /** The principal leaves this account while the deposit runs. Null predates accounts. */
+  sourceAccountId: string | null;
+  /** Where principal plus interest lands once it matures. Defaults to the source. */
+  targetAccountId: string | null;
   note: string | null;
   createdAt: string;
   updatedAt: string;
@@ -552,6 +602,7 @@ export interface FinanceOverview {
   monthlyExpenseBase: number;
   /** The totals are short by these — say so rather than showing a flat number. */
   hasUnpricedHoldings: boolean;
+  accounts: Account[];
   flows: FinanceFlow[];
   positions: Position[];
   deposits: Deposit[];
@@ -589,6 +640,7 @@ export interface FlowDraft {
 }
 
 export interface EntryDraft {
+  accountId: string;
   kind: FlowKind;
   name: string;
   amount: number;
@@ -600,6 +652,7 @@ export interface EntryDraft {
 }
 
 export interface HoldingDraft {
+  accountId: string;
   symbol: string;
   name: string | null;
   currency: string;
@@ -635,6 +688,15 @@ export interface DepositDraft {
   compounding: Compounding;
   openedOn: string;
   maturesOn: string | null;
+  sourceAccountId: string | null;
+  targetAccountId: string | null;
+  note: string | null;
+}
+
+export interface AccountDraft {
+  name: string;
+  kind: AccountKind;
+  currency: string;
   note: string | null;
 }
 

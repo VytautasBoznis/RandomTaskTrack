@@ -285,6 +285,10 @@ public static class ServiceCollectionExtensions
 
         // Finance
         services.AddSingleton<IValidator<GetFinanceOverviewRequest>, GetFinanceOverviewRequestValidator>();
+        services.AddSingleton<IValidator<CreateAccountRequest>, CreateAccountRequestValidator>();
+        services.AddSingleton<IValidator<UpdateAccountRequest>, UpdateAccountRequestValidator>();
+        services.AddSingleton<IValidator<DeleteAccountRequest>, DeleteAccountRequestValidator>();
+        services.AddSingleton<IValidator<SetAccountBalanceRequest>, SetAccountBalanceRequestValidator>();
         services.AddSingleton<IValidator<GetProjectionRequest>, GetProjectionRequestValidator>();
         services.AddSingleton<IValidator<RefreshPricesRequest>, RefreshPricesRequestValidator>();
         services.AddSingleton<IValidator<CreateFlowRequest>, CreateFlowRequestValidator>();
@@ -379,6 +383,10 @@ public static class ServiceCollectionExtensions
 
         // Finance
         services.AddScoped<GetFinanceOverviewOperation>();
+        services.AddScoped<CreateAccountOperation>();
+        services.AddScoped<UpdateAccountOperation>();
+        services.AddScoped<DeleteAccountOperation>();
+        services.AddScoped<SetAccountBalanceOperation>();
         services.AddScoped<GetProjectionOperation>();
         services.AddScoped<RefreshPricesOperation>();
         services.AddScoped<CreateFlowOperation>();

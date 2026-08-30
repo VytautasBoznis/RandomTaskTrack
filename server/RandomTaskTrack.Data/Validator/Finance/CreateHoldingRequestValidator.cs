@@ -7,6 +7,7 @@ public class CreateHoldingRequestValidator : AbstractValidator<CreateHoldingRequ
 {
     public CreateHoldingRequestValidator()
     {
+        RuleFor(x => x.AccountId).NotEmpty();
         RuleFor(x => x.Symbol).NotEmpty().MaximumLength(40);
         RuleFor(x => x.Name).MaximumLength(200);
         RuleFor(x => x.Currency).NotEmpty().Length(3);

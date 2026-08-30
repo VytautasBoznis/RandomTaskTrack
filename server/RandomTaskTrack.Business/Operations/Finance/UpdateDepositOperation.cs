@@ -40,6 +40,12 @@ public class UpdateDepositOperation : BaseOperation<UpdateDepositRequest, Update
         deposit.MaturesOn = request.MaturesOn ?? deposit.MaturesOn;
         deposit.Note = request.Note ?? deposit.Note;
 
+        (deposit.SourceAccountId, deposit.TargetAccountId) = await FinanceGuards.ResolveDepositAccountsAsync(
+            request.SourceAccountId ?? deposit.SourceAccountId,
+            request.TargetAccountId ?? deposit.TargetAccountId,
+            _financeRepository,
+            unitOfWork);
+
         if (request.Currency is not null)
         {
             deposit.Currency = await FinanceGuards.ResolveCurrencyAsync(request.Currency, _financeRepository, unitOfWork);

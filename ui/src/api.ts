@@ -1,4 +1,5 @@
 import type {
+  AccountDraft,
   CatalogStatus,
   ChatReply,
   CompletionLogItem,
@@ -10,6 +11,7 @@ import type {
   Dividend,
   DividendDraft,
   EntryDraft,
+  FinanceAccount,
   FinanceFlow,
   FinanceOverview,
   FinanceTarget,
@@ -373,6 +375,31 @@ export const getProjection = async (months: number, historyMonths: number, stock
 // whatever price it had.
 export const refreshPrices = () =>
   request<PriceRefreshResult>('/finance/prices/refresh', { method: 'POST' });
+
+// Accounts. There is no endpoint that writes a balance: setBalance types the
+// number you can see and the server logs the difference as an entry, so the
+// total stays something the ledger explains.
+export const createAccount = (draft: AccountDraft) =>
+  request<{ account: FinanceAccount }>('/finance/accounts', {
+    method: 'POST',
+    body: JSON.stringify(draft),
+  });
+
+export const updateAccount = (id: string, draft: Partial<AccountDraft>) =>
+  request<{ account: FinanceAccount }>(`/finance/accounts/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(draft),
+  });
+
+export const deleteAccount = (id: string) =>
+  request<{ success: boolean }>(`/finance/accounts/${id}`, { method: 'DELETE' });
+
+/** `entry` comes back null when the balance already read what was asked for. */
+export const setAccountBalance = (id: string, balance: number, note: string | null) =>
+  request<{ entry: LedgerEntry | null }>(`/finance/accounts/${id}/balance`, {
+    method: 'POST',
+    body: JSON.stringify({ balance, note }),
+  });
 
 export const createFlow = (draft: FlowDraft) =>
   request<{ flow: FinanceFlow }>('/finance/flows', { method: 'POST', body: JSON.stringify(draft) });

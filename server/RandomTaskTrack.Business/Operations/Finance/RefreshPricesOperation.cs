@@ -62,7 +62,13 @@ public class RefreshPricesOperation : BaseOperation<RefreshPricesRequest, Refres
                 c => c.Code,
                 StringComparer.OrdinalIgnoreCase);
 
-        List<string> symbols = holdings.Select(h => h.Symbol).Concat(pairs.Keys).ToList();
+        // Distinct: the same symbol held in two accounts is two holdings but
+        // one quote, and asking twice would only be slower and ruder.
+        List<string> symbols = holdings
+            .Select(h => h.Symbol)
+            .Concat(pairs.Keys)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
 
         if (symbols.Count == 0)
         {
@@ -78,16 +84,17 @@ public class RefreshPricesOperation : BaseOperation<RefreshPricesRequest, Refres
         DateTime now = _clock.UtcNow;
         var response = new RefreshPricesResponse();
 
-        foreach (Holding holding in holdings)
+        foreach (string symbol in holdings.Select(h => h.Symbol).Distinct(StringComparer.OrdinalIgnoreCase))
         {
-            if (!bySymbol.TryGetValue(holding.Symbol, out StockQuote? quote))
+            if (!bySymbol.TryGetValue(symbol, out StockQuote? quote))
             {
-                response.Failed.Add(holding.Symbol);
+                response.Failed.Add(symbol);
                 continue;
             }
 
-            await _financeRepository.UpdateHoldingPriceAsync(holding.Id, quote.Price, now, unitOfWork);
-            response.UpdatedHoldings++;
+            // One write per symbol, counted per holding it landed on: a symbol
+            // held in two accounts really did update two positions.
+            response.UpdatedHoldings += await _financeRepository.UpdatePricesBySymbolAsync(symbol, quote.Price, now, unitOfWork);
         }
 
         foreach ((string pairSymbol, string code) in pairs)

@@ -1,12 +1,13 @@
+using RandomTaskTrack.Data.Models.Enums;
 using RandomTaskTrack.Data.Request.Base;
 
 namespace RandomTaskTrack.Data.Request.Finance;
 
-public class UpdateHoldingRequest : AuthenticatedRequest
+public class UpdateAccountRequest : AuthenticatedRequest
 {
     public Guid Id { get; set; }
-    public Guid? AccountId { get; set; }
-    public string? Symbol { get; set; }
     public string? Name { get; set; }
+    public AccountKind? Kind { get; set; }
     public string? Currency { get; set; }
+    public string? Note { get; set; }
 }

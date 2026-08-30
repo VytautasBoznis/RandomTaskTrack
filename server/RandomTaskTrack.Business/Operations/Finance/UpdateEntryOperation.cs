@@ -38,6 +38,11 @@ public class UpdateEntryOperation : BaseOperation<UpdateEntryRequest, UpdateEntr
         entry.Category = request.Category ?? entry.Category;
         entry.Note = request.Note ?? entry.Note;
 
+        if (request.AccountId.HasValue)
+        {
+            entry.AccountId = (await FinanceGuards.ResolveAccountAsync(request.AccountId.Value, _financeRepository, unitOfWork)).Id;
+        }
+
         if (request.Currency is not null)
         {
             entry.Currency = await FinanceGuards.ResolveCurrencyAsync(request.Currency, _financeRepository, unitOfWork);

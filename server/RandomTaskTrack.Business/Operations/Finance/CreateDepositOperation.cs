@@ -30,6 +30,9 @@ public class CreateDepositOperation : BaseOperation<CreateDepositRequest, Create
 
     protected override async Task<CreateDepositResponse> Execute(CreateDepositRequest request, IUnitOfWork unitOfWork)
     {
+        (Guid? source, Guid? target) = await FinanceGuards.ResolveDepositAccountsAsync(
+            request.SourceAccountId, request.TargetAccountId, _financeRepository, unitOfWork);
+
         var deposit = new Deposit
         {
             Id = Guid.NewGuid(),
@@ -43,6 +46,8 @@ public class CreateDepositOperation : BaseOperation<CreateDepositRequest, Create
             Compounding = request.Compounding ?? DepositCompounding.Annual,
             OpenedOn = request.OpenedOn,
             MaturesOn = request.MaturesOn,
+            SourceAccountId = source,
+            TargetAccountId = target,
             Note = request.Note
         };
 

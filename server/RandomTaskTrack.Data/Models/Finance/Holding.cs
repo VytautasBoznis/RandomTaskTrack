@@ -5,6 +5,13 @@ public class Holding
     public Guid Id { get; set; }
 
     /// <summary>
+    /// The account the shares are held in. The same symbol in two accounts is
+    /// two holdings — bought at different times for different reasons — which
+    /// is why the symbol is unique per account rather than globally.
+    /// </summary>
+    public Guid AccountId { get; set; }
+
+    /// <summary>
     /// In the price source's own vocabulary — Yahoo wants <c>AAPL</c> for
     /// Nasdaq and <c>ASML.AS</c> for Amsterdam. Same bargain recipe families
     /// make with cuisine codes.

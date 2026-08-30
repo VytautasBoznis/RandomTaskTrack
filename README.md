@@ -90,11 +90,13 @@ Jenkinsfile   build → push → deploy
 | GET | `/api/plants/photos/{id}` · DELETE | the image bytes · remove a stage |
 | POST | `/api/plants/{id}/schedule` | turn chosen care lines into recurrences |
 | POST | `/api/plants/{id}/sowing` | date a seed packet's plan from the day it gets sown |
-| GET | `/api/finance/overview` | cash, deposits, positions, flows, targets — one call |
+| GET | `/api/finance/overview` | accounts, cash, deposits, positions, flows, targets — one call |
 | GET | `/api/finance/projection` | the monthly series; `months`, `historyMonths`, `stockGrowth` |
 | POST | `/api/finance/prices/refresh` | pull share prices and FX rates |
 | GET/POST/PUT/DELETE | `/api/finance/entries` | the cash ledger |
 | POST/PUT/DELETE | `/api/finance/flows` | recurring income and expenses |
+| POST/PUT/DELETE | `/api/finance/accounts` | the pots the money sits in |
+| POST | `/api/finance/accounts/{id}/balance` | type the balance you can see; logs the difference |
 | POST/PUT/DELETE | `/api/finance/holdings` · `/trades` · `/dividends` · `/deposits` · `/targets` | |
 | GET/POST/PUT/DELETE | `/api/notes` | markdown notes, newest edit first |
 | POST | `/api/chat/messages` | one agent turn |
@@ -246,6 +248,27 @@ maturing and a dividend landing. The corollary that bit once already: a deposit
 maturing inside a month must drop out of the deposits column in the same month
 its value lands in cash, or net worth jumps by a whole deposit for one month —
 that is what `FinanceProjector.StillHeld` is for.
+
+**Balances are derived too, per account.** `fin_accounts` has no balance column.
+An account's balance is its entries plus what its deposits have moved, computed
+in `FinanceProjector.BuildAccounts`, and "Set balance" writes one *Balance
+adjustment* entry for the difference rather than storing the number. A stored
+total would be the single figure in the scope that could disagree with the
+ledger under it, and it would start disagreeing the first time an old entry was
+corrected. Every entry and every holding names an account; a symbol is unique
+per account rather than globally, so the same ETF in a brokerage and a pension
+is two positions.
+
+**A deposit moves its own money.** `source_account_id` and `target_account_id`
+mean the principal leaves the source while the deposit is open and principal
+plus interest lands in the target once `matures_on` has passed — both derived,
+so nothing runs on the maturity date and deleting the deposit undoes both
+halves. Never log an entry for either leg. Both columns are nullable because
+deposits predating `v0.10` had their transfer logged by hand, and attaching an
+account retroactively would subtract the same money twice. The overlap in
+`FinanceProjector` (`windowFrom`) is what stops a deposit that opens or matures
+later *this* month falling into the gap between the anchor and the first
+projected bucket.
 
 Two consequences worth knowing. Net worth is projected **forward only**: valuing
 holdings in the past would need historical prices this app does not store, so

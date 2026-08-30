@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import FinanceAccounts from './FinanceAccounts';
 import FinanceDeposits from './FinanceDeposits';
 import FinanceInvestments from './FinanceInvestments';
 import FinanceLedger from './FinanceLedger';
@@ -6,10 +7,11 @@ import FinanceOverviewPane from './FinanceOverviewPane';
 import FinanceRecurring from './FinanceRecurring';
 import FinanceTargets from './FinanceTargets';
 
-type Pane = 'overview' | 'recurring' | 'ledger' | 'investments' | 'deposits' | 'targets';
+type Pane = 'overview' | 'accounts' | 'recurring' | 'ledger' | 'investments' | 'deposits' | 'targets';
 
 const PANES: { id: Pane; label: string }[] = [
   { id: 'overview', label: 'Overview' },
+  { id: 'accounts', label: 'Accounts' },
   { id: 'recurring', label: 'Recurring' },
   { id: 'ledger', label: 'Ledger' },
   { id: 'investments', label: 'Investments' },
@@ -38,6 +40,7 @@ export default function Finance({ onUnauthorized }: { onUnauthorized: () => void
       {/* Remounting on every switch, as the top-level nav does: logging an
           expense here has to move the numbers on Overview. */}
       {pane === 'overview' && <FinanceOverviewPane onUnauthorized={onUnauthorized} />}
+      {pane === 'accounts' && <FinanceAccounts onUnauthorized={onUnauthorized} />}
       {pane === 'recurring' && <FinanceRecurring onUnauthorized={onUnauthorized} />}
       {pane === 'ledger' && <FinanceLedger onUnauthorized={onUnauthorized} />}
       {pane === 'investments' && <FinanceInvestments onUnauthorized={onUnauthorized} />}

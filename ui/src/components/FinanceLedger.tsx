@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { createEntry, deleteEntry, getEntries, getFinanceOverview } from '../api';
 import { useApiError } from '../hooks';
 import { FlowKinds } from '../types';
-import type { Currency, FinanceFlow, FlowKind, LedgerEntry } from '../types';
+import type { Account, Currency, FinanceFlow, FlowKind, LedgerEntry } from '../types';
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -14,6 +14,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 export default function FinanceLedger({ onUnauthorized }: { onUnauthorized: () => void }) {
   const { error, setError, fail } = useApiError(onUnauthorized);
   const [entries, setEntries] = useState<LedgerEntry[] | null>(null);
+  const [accounts, setAccounts] = useState<Account[]>([]);
   const [flows, setFlows] = useState<FinanceFlow[]>([]);
   const [currencies, setCurrencies] = useState<Currency[]>([]);
   const [baseCurrency, setBaseCurrency] = useState('EUR');
@@ -26,6 +27,7 @@ export default function FinanceLedger({ onUnauthorized }: { onUnauthorized: () =
       Promise.all([getEntries(null, null, search), getFinanceOverview()])
         .then(([rows, overview]) => {
           setEntries(rows);
+          setAccounts(overview.accounts);
           setFlows(overview.flows);
           setCurrencies(overview.currencies);
           setBaseCurrency(overview.baseCurrency);
@@ -78,6 +80,7 @@ export default function FinanceLedger({ onUnauthorized }: { onUnauthorized: () =
 
       {adding && (
         <EntryForm
+          accounts={accounts}
           flows={flows}
           currencies={currencies}
           baseCurrency={baseCurrency}
@@ -104,6 +107,8 @@ export default function FinanceLedger({ onUnauthorized }: { onUnauthorized: () =
                 <span className="notes">
                   {entry.kind === FlowKinds.Income ? '+' : '−'}
                   {entry.amount.toLocaleString()} {entry.currency} · {entry.occurredOn}
+                  {' · '}
+                  {accounts.find((a) => a.id === entry.accountId)?.name ?? 'unknown account'}
                   {entry.category !== null && ` · ${entry.category}`}
                 </span>
                 <span className="actions">
@@ -126,6 +131,7 @@ export default function FinanceLedger({ onUnauthorized }: { onUnauthorized: () =
 }
 
 function EntryForm({
+  accounts,
   flows,
   currencies,
   baseCurrency,
@@ -133,6 +139,7 @@ function EntryForm({
   onCancel,
   onError,
 }: {
+  accounts: Account[];
   flows: FinanceFlow[];
   currencies: Currency[];
   baseCurrency: string;
@@ -140,6 +147,9 @@ function EntryForm({
   onCancel: () => void;
   onError: (e: unknown) => void;
 }) {
+  // The first account, which is the first cash one — the usual answer, and
+  // still one tap to change.
+  const [accountId, setAccountId] = useState(accounts[0]?.id ?? '');
   const [kind, setKind] = useState<FlowKind>(FlowKinds.Expense);
   const [name, setName] = useState('');
   const [amount, setAmount] = useState('');
@@ -171,6 +181,7 @@ function EntryForm({
 
     try {
       await createEntry({
+        accountId,
         kind,
         name,
         amount: Number(amount),
@@ -192,6 +203,17 @@ function EntryForm({
   return (
     <form className="card task-form" onSubmit={submit}>
       <div className="row">
+        <label>
+          Account
+          <select value={accountId} onChange={(e) => setAccountId(e.target.value)} required>
+            {accounts.map((account) => (
+              <option key={account.id} value={account.id}>
+                {account.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
         <label>
           From a recurring one
           <select value={flowId} onChange={(e) => pickFlow(e.target.value)}>

@@ -12,6 +12,17 @@ namespace RandomTaskTrack.Interfaces.Repositories.Finance;
 /// </summary>
 public interface IFinanceRepository
 {
+    // ── Accounts ─────────────────────────────────────────────────────────────
+    Task<List<FinanceAccount>> GetAccountsAsync(IUnitOfWork unitOfWork);
+    Task<FinanceAccount?> GetAccountAsync(Guid id, IUnitOfWork unitOfWork);
+    Task<FinanceAccount?> GetAccountByNameAsync(string name, IUnitOfWork unitOfWork);
+    Task CreateAccountAsync(FinanceAccount account, IUnitOfWork unitOfWork);
+    Task UpdateAccountAsync(FinanceAccount account, IUnitOfWork unitOfWork);
+    Task<bool> DeleteAccountAsync(Guid id, IUnitOfWork unitOfWork);
+
+    /// <summary>Entries, holdings and deposits still pointing at an account.</summary>
+    Task<int> CountAccountUsesAsync(Guid id, IUnitOfWork unitOfWork);
+
     // ── Currencies ───────────────────────────────────────────────────────────
     Task<List<Currency>> GetCurrenciesAsync(IUnitOfWork unitOfWork);
     Task<Currency?> GetCurrencyAsync(string code, IUnitOfWork unitOfWork);
@@ -39,10 +50,10 @@ public interface IFinanceRepository
     Task<bool> DeleteEntryAsync(Guid id, IUnitOfWork unitOfWork);
 
     /// <summary>
-    /// Every entry ever, netted per currency. The projection starts from this:
-    /// current cash is derived, never typed in.
+    /// Every entry ever, netted per account and currency. Balances start from
+    /// this: they are derived, never typed in.
     /// </summary>
-    Task<List<CurrencyAmount>> GetCashByCurrencyAsync(IUnitOfWork unitOfWork);
+    Task<List<AccountCash>> GetCashByAccountAsync(IUnitOfWork unitOfWork);
 
     /// <summary>Actual income and expenses per month, for the history half of the chart.</summary>
     Task<List<MonthlyTotal>> GetMonthlyTotalsAsync(DateOnly from, IUnitOfWork unitOfWork);
@@ -50,10 +61,13 @@ public interface IFinanceRepository
     // ── Holdings and trades ──────────────────────────────────────────────────
     Task<List<Holding>> GetHoldingsAsync(IUnitOfWork unitOfWork);
     Task<Holding?> GetHoldingAsync(Guid id, IUnitOfWork unitOfWork);
-    Task<Holding?> GetHoldingBySymbolAsync(string symbol, IUnitOfWork unitOfWork);
+    Task<Holding?> GetHoldingBySymbolAsync(Guid accountId, string symbol, IUnitOfWork unitOfWork);
     Task CreateHoldingAsync(Holding holding, IUnitOfWork unitOfWork);
     Task UpdateHoldingAsync(Holding holding, IUnitOfWork unitOfWork);
-    Task UpdateHoldingPriceAsync(Guid id, decimal price, DateTime asOf, IUnitOfWork unitOfWork);
+
+    /// <summary>One quote answers for every account holding that symbol.</summary>
+    Task<int> UpdatePricesBySymbolAsync(string symbol, decimal price, DateTime asOf, IUnitOfWork unitOfWork);
+
     Task<bool> DeleteHoldingAsync(Guid id, IUnitOfWork unitOfWork);
 
     Task<List<Trade>> GetTradesAsync(IUnitOfWork unitOfWork);

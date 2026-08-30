@@ -18,5 +18,14 @@ public class CreateDepositRequest : AuthenticatedRequest
     /// <summary>Null is open-ended: it accrues and never returns to cash on its own.</summary>
     public DateOnly? MaturesOn { get; set; }
 
+    /// <summary>
+    /// The account the principal comes out of. Optional: leave it unset to
+    /// record a deposit whose transfer you logged as an entry yourself.
+    /// </summary>
+    public Guid? SourceAccountId { get; set; }
+
+    /// <summary>Where it lands at maturity. Defaults to the source.</summary>
+    public Guid? TargetAccountId { get; set; }
+
     public string? Note { get; set; }
 }

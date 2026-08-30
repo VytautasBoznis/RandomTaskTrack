@@ -12,8 +12,10 @@ public class FinanceOverviewDto
     public string BaseCurrency { get; set; } = "";
 
     /// <summary>
-    /// Every ledger entry ever, netted and converted. This is the derived
-    /// "what is in the account right now" the whole projection starts from.
+    /// What is in the accounts right now: every ledger entry ever, netted and
+    /// converted, plus the money the deposits have moved between them. Equal to
+    /// the sum of <see cref="AccountDto.BalanceBase"/>, and the figure the whole
+    /// projection starts from.
     /// </summary>
     public decimal CashBase { get; set; }
 
@@ -33,6 +35,7 @@ public class FinanceOverviewDto
     /// <summary>True when a holding has no price yet, so the UI can say the total is short.</summary>
     public bool HasUnpricedHoldings { get; set; }
 
+    public List<AccountDto> Accounts { get; set; } = new();
     public List<FinanceFlow> Flows { get; set; } = new();
     public List<PositionDto> Positions { get; set; } = new();
     public List<Deposit> Deposits { get; set; } = new();

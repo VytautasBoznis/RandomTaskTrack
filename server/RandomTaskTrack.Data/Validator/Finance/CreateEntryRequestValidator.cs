@@ -7,6 +7,7 @@ public class CreateEntryRequestValidator : AbstractValidator<CreateEntryRequest>
 {
     public CreateEntryRequestValidator()
     {
+        RuleFor(x => x.AccountId).NotEmpty();
         RuleFor(x => x.Kind).IsInEnum();
         RuleFor(x => x.Name).NotEmpty().MaximumLength(200);
         RuleFor(x => x.Amount).GreaterThan(0);
