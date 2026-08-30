@@ -29,8 +29,10 @@ public class AiLearningResearcher : ILearningResearcher
 
     /// <summary>A whole route with phases, certs, resources and projects. Enough
     /// headroom that a long answer finishes rather than being truncated into
-    /// invalid JSON.</summary>
-    private const int PlanMaxTokens = 8000;
+    /// invalid JSON — and the answer is not all this pays for. Thinking counts
+    /// against the same ceiling, and this model thinks before it writes, so a
+    /// budget sized to the JSON alone gets spent before the JSON starts.</summary>
+    private const int PlanMaxTokens = 16000;
 
     /// <summary>A renewal rule is a paragraph and a number.</summary>
     private const int CredentialMaxTokens = 1500;
@@ -177,6 +179,39 @@ public class AiLearningResearcher : ILearningResearcher
             throw new AiProviderException(
                 "The lookup declined to answer.",
                 ExceptionCodes.LEARNING_RESEARCH_FAILED);
+        }
+
+        // Both of these reach Parse as text that will not deserialise, and Parse
+        // can only report that the shape was wrong — it is handed a string and
+        // the stop reason is already gone. Naming them here, while that is still
+        // in hand, is what separates "raise the ceiling" from "ask again".
+        if (response.StopReason == AiStopReason.MaxTokens)
+        {
+            _logger.LogWarning(
+                "Learning lookup hit its {Ceiling}-token ceiling after {Output} output tokens",
+                request.MaxTokens,
+                response.Usage.OutputTokens);
+
+            throw new AiProviderException(
+                "The lookup ran past the length it is allowed.",
+                ExceptionCodes.LEARNING_RESEARCH_FAILED,
+                "Try again — a shorter brief usually fits.");
+        }
+
+        if (string.IsNullOrWhiteSpace(response.Content))
+        {
+            // Nothing to parse at all. The turn ended without the model ever
+            // writing text — searching until the resume budget ran out does
+            // this, and so does spending the whole ceiling on thinking.
+            _logger.LogWarning(
+                "Learning lookup returned no text; stopped on {StopReason} after {Output} output tokens",
+                response.StopReason,
+                response.Usage.OutputTokens);
+
+            throw new AiProviderException(
+                "The lookup came back empty.",
+                ExceptionCodes.LEARNING_RESEARCH_FAILED,
+                "Try again — the same question usually works on a second ask.");
         }
 
         return response;

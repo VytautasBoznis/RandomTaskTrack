@@ -28,8 +28,11 @@ public class AiPlantResearcher : IPlantResearcher
     private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web);
 
     /// <summary>A profile is a page of prose, not an essay. Enough headroom that
-    /// a long answer finishes rather than being truncated into invalid JSON.</summary>
-    private const int MaxTokens = 3000;
+    /// a long answer finishes rather than being truncated into invalid JSON —
+    /// and the answer is not all this pays for. Thinking counts against the same
+    /// ceiling, and this model thinks before it writes, so a budget sized to the
+    /// JSON alone gets spent before the JSON starts.</summary>
+    private const int MaxTokens = 6000;
 
     /// <summary>A stage read is two fields. It does not need room to ramble.</summary>
     private const int StageMaxTokens = 500;
