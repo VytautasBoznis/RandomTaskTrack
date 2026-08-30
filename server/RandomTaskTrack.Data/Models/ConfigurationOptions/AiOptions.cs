@@ -26,6 +26,13 @@ public class AiOptions
     /// cannot spin up an unbounded number of billed round trips.</summary>
     public int MaxToolIterations { get; set; } = 8;
 
+    /// <summary>
+    /// How long one request to the provider may take. The SDK's own default is
+    /// ten minutes, which a research answer — high effort, several web searches
+    /// — can outrun, and the timeout then surfaces as a bare cancellation.
+    /// </summary>
+    public int RequestTimeoutMinutes { get; set; } = 20;
+
     /// <summary>Provider-specific knobs (Anthropic effort/thinking, etc). Kept
     /// out of IAiProvider on purpose — forcing these into a common shape gives
     /// a lowest-common-denominator abstraction.</summary>

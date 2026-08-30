@@ -53,7 +53,11 @@ public class AnthropicAiProvider : IAiProvider
                 "Set Ai:ApiKey (env: Ai__ApiKey).");
         }
 
-        _client = new AnthropicClient { ApiKey = _options.ApiKey };
+        _client = new AnthropicClient
+        {
+            ApiKey = _options.ApiKey,
+            Timeout = TimeSpan.FromMinutes(_options.RequestTimeoutMinutes)
+        };
     }
 
     public async Task<AiModels.AiResponse> CompleteAsync(AiModels.AiRequest request, CancellationToken cancellationToken)
@@ -148,7 +152,28 @@ public class AnthropicAiProvider : IAiProvider
 
         try
         {
-            return await _client.Messages.Create(parameters, cancellationToken: cancellationToken);
+            // Streamed and reassembled, rather than awaited whole. A research
+            // turn — high effort, several web searches — can spend minutes
+            // producing nothing on a non-streaming connection, which is long
+            // enough for the SDK's request timeout and for any idle timeout
+            // between here and the API to give up on it. A stream that is
+            // delivering keeps both alive. Nothing above IAiProvider consumes
+            // deltas, so the events go straight back into the same Message a
+            // non-streaming call would have returned.
+            return await _client.Messages.CreateStreaming(parameters, cancellationToken).Aggregate();
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // The SDK's own timeout rather than the caller giving up. Left as a
+            // raw OperationCanceledException it reaches the tablet as "The
+            // operation was canceled.", which says nothing to the person
+            // standing in front of it.
+            _logger.LogError("Anthropic request timed out after {Minutes} minutes", _options.RequestTimeoutMinutes);
+
+            throw new AiProviderException(
+                "The AI provider took too long to answer.",
+                ExceptionCodes.AI_PROVIDER_TIMEOUT,
+                "Try again — a shorter brief usually comes back faster.");
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

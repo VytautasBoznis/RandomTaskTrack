@@ -54,6 +54,7 @@ public static class ExceptionCodes
 
     public const string AI_PROVIDER_NOT_CONFIGURED = "AI_PROVIDER_NOT_CONFIGURED";
     public const string AI_PROVIDER_FAILED = "AI_PROVIDER_FAILED";
+    public const string AI_PROVIDER_TIMEOUT = "AI_PROVIDER_TIMEOUT";
     public const string AI_TOOL_LIMIT_EXCEEDED = "AI_TOOL_LIMIT_EXCEEDED";
 
     public const string VALIDATION_FAILED = "VALIDATION_FAILED";
