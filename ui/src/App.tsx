@@ -71,7 +71,7 @@ export default function App() {
 
           {/* Remounting on every switch is deliberate: each view re-reads on
               mount, which is also how a chat turn's writes reach the dashboard. */}
-          {view === 'today' && <Dashboard onUnauthorized={signOut} />}
+          {view === 'today' && <Dashboard onUnauthorized={signOut} onOpenLearning={() => setView('learning')} />}
           {view === 'recurrences' && <Recurrences onUnauthorized={signOut} />}
           {view === 'recipes' && <Recipes onUnauthorized={signOut} />}
           {view === 'plants' && <Plants onUnauthorized={signOut} />}

@@ -1198,3 +1198,28 @@ nav.sub button.tab {
 .credential .care {
   margin: 12px 0;
 }
+
+/* The learning rows on the dashboard. One line per path, and the line is the
+   way through to it — there is nothing else to do to one from here. */
+.learning-board .row-link {
+  background: none;
+  border: none;
+  border-radius: 0;
+  color: var(--text);
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-weight: 400;
+  padding: 4px 0;
+  text-align: left;
+  width: 100%;
+}
+
+.learning-board .row-link .go {
+  color: var(--muted);
+  font-size: 20px;
+}
+
+.learning-board .due.overdue {
+  color: var(--error);
+}

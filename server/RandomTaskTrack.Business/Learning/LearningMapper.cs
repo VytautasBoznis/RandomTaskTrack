@@ -68,6 +68,11 @@ internal static class LearningMapper
     public static Guid? CredentialIdOf(string? data) =>
         Guid.TryParse(Read(data, CredentialIdKey), out Guid id) ? id : null;
 
+    /// <summary>Which path a task payload names. What lets the dashboard group
+    /// a path's tasks into one row without going back for the step.</summary>
+    public static Guid? GoalIdOf(string? data) =>
+        Guid.TryParse(Read(data, GoalIdKey), out Guid id) ? id : null;
+
     public static LearningGoalDto ToDto(LearningGoal goal, List<LearningStepDto> steps, DateOnly today) => new()
     {
         Id = goal.Id,

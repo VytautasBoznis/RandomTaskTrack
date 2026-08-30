@@ -55,12 +55,23 @@ export interface DomainStreak {
   lastCompletedAt: string | null;
 }
 
+/** A learning path with something on the board, as one row. `goalId` is null on
+ *  a credential renewal — those sit on no path. */
+export interface DashboardLearning {
+  goalId: string | null;
+  title: string;
+  count: number;
+  nextDueOn: string;
+}
+
 export interface Dashboard {
   today: string;
   overdue: TaskListItem[];
   dueToday: TaskListItem[];
   upcoming: TaskListItem[];
   completedToday: TaskListItem[];
+  /** Kept out of the buckets above — the server files these here instead. */
+  learning: DashboardLearning[];
   streaks: DomainStreak[];
 }
 

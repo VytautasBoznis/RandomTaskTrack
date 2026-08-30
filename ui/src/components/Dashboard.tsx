@@ -3,9 +3,46 @@ import { completeTask, deleteTask, getDashboard } from '../api';
 import { useApiError, useDomains } from '../hooks';
 import TaskForm from './TaskForm';
 import { TaskStatus } from '../types';
-import type { Dashboard as DashboardData, TaskItemStatus, TaskListItem } from '../types';
+import type { DashboardLearning, Dashboard as DashboardData, TaskItemStatus, TaskListItem } from '../types';
 
 const COLLAPSED_COUNT = 3;
+
+/**
+ * What the learning tab has on the board, one row per path. Deliberately not a
+ * Bucket: there is nothing to do to these here. A step is finished on its path,
+ * where the outcome and the next step are, so every row is a way through to the
+ * Learning tab and nothing else.
+ */
+function LearningSection({ rows, today, onOpen }: { rows: DashboardLearning[]; today: string; onOpen: () => void }) {
+  if (rows.length === 0) {
+    return null;
+  }
+
+  return (
+    <section className="card learning-board">
+      <h2>
+        Learning <span className="count">{rows.length}</span>
+      </h2>
+
+      <ul>
+        {rows.map((row) => (
+          <li key={row.goalId ?? row.title}>
+            {/* The whole row is the button. A text-sized target is not enough
+                on the tablet this is read on. */}
+            <button type="button" className="row-link" onClick={onOpen}>
+              <span className="title">{row.title}</span>
+              <span className={row.nextDueOn < today ? 'due overdue' : 'due'}>
+                {row.count > 1 && `${row.count} · `}
+                {row.nextDueOn}
+              </span>
+              <span className="go">›</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
 
 function Bucket({
   title,
@@ -81,7 +118,13 @@ function Bucket({
   );
 }
 
-export default function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
+export default function Dashboard({
+  onUnauthorized,
+  onOpenLearning,
+}: {
+  onUnauthorized: () => void;
+  onOpenLearning: () => void;
+}) {
   const { error, setError, fail } = useApiError(onUnauthorized);
   const domains = useDomains(fail);
   const [data, setData] = useState<DashboardData | null>(null);
@@ -162,6 +205,8 @@ export default function Dashboard({ onUnauthorized }: { onUnauthorized: () => vo
           onDelete={onDelete}
         />
       </div>
+
+      <LearningSection rows={data.learning} today={data.today} onOpen={onOpenLearning} />
 
       <section className="card">
         <h2>Last 7 days</h2>
