@@ -152,15 +152,17 @@ public class AnthropicAiProvider : IAiProvider
 
         try
         {
-            // Streamed and reassembled, rather than awaited whole. A research
-            // turn — high effort, several web searches — can spend minutes
-            // producing nothing on a non-streaming connection, which is long
-            // enough for the SDK's request timeout and for any idle timeout
-            // between here and the API to give up on it. A stream that is
-            // delivering keeps both alive. Nothing above IAiProvider consumes
-            // deltas, so the events go straight back into the same Message a
-            // non-streaming call would have returned.
-            return await _client.Messages.CreateStreaming(parameters, cancellationToken).Aggregate();
+            // Awaited whole rather than streamed, despite turns that run for
+            // minutes. CreateStreaming().Aggregate() is the obvious way to keep
+            // a slow connection alive, and it does not survive web search: the
+            // SDK's MessageContentAggregator throws "Sequence contains no
+            // elements" merging a server_tool_use block that arrives without
+            // input deltas (12.39.0). Aggregating by hand instead would mean
+            // rebuilding the search result blocks from events — the same
+            // field-by-field reconstruction ToParams exists to avoid, and the
+            // resumed request is invalid if encrypted_content is lost in it.
+            // Timeout below is what buys the time instead.
+            return await _client.Messages.Create(parameters, cancellationToken: cancellationToken);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
