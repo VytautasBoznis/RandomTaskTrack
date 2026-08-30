@@ -90,7 +90,7 @@ Jenkinsfile   build → push → deploy
 | GET | `/api/plants/photos/{id}` · DELETE | the image bytes · remove a stage |
 | POST | `/api/plants/{id}/schedule` | turn chosen care lines into recurrences |
 | POST | `/api/plants/{id}/sowing` | date a seed packet's plan from the day it gets sown |
-| GET | `/api/finance/overview` | accounts, cash, deposits, positions, flows, targets — one call |
+| GET | `/api/finance/overview` | accounts, cash, deposits, positions, flows, debts, targets — one call |
 | GET | `/api/finance/projection` | the monthly series; `months`, `historyMonths`, `stockGrowth` |
 | POST | `/api/finance/prices/refresh` | pull share prices and FX rates |
 | GET/POST/PUT/DELETE | `/api/finance/entries` | the cash ledger |
@@ -98,6 +98,8 @@ Jenkinsfile   build → push → deploy
 | POST/PUT/DELETE | `/api/finance/accounts` | the pots the money sits in |
 | POST | `/api/finance/accounts/{id}/balance` | type the balance you can see; logs the difference |
 | POST/PUT/DELETE | `/api/finance/holdings` · `/trades` · `/dividends` · `/deposits` · `/targets` | |
+| POST/PUT/DELETE | `/api/finance/debts` | mortgages, loans and leases; the schedule is derived |
+| POST/DELETE | `/api/finance/debts/{id}/payments` | lump sums off the principal |
 | GET | `/api/learning` | every path with its steps, and every credential held — one call |
 | POST/PUT/DELETE | `/api/learning/goals[/{id}]` | a path: why, expected benefits, "prepared by" |
 | POST | `/api/learning/goals/{id}/plan` | draft or re-draft the route; committed steps survive it |
@@ -278,6 +280,33 @@ account retroactively would subtract the same money twice. The overlap in
 `FinanceProjector` (`windowFrom`) is what stops a deposit that opens or matures
 later *this* month falling into the gap between the anchor and the first
 projected bucket.
+
+**A debt is amortised, and its payoff date is derived.** `fin_debts` has no
+outstanding-balance column: what is owed on a month is the principal run forward
+through the schedule in `FinanceProjector.Amortise`, interest accruing on the
+balance and each payment taking the remainder off the principal. Storing a
+payoff date would make it a lie the first time a lump sum landed, so `ends_on`
+records only what the contract says and the month the balance actually reaches
+zero is computed — the gap between them is the entire point of
+`fin_debt_payments`. `ends_on` still caps the schedule, and a balance standing
+on that date is reported as a balloon rather than silently paid or silently paid
+forever; a payment too small to cover the interest is refused up front, with a
+600-month cap behind it so a row that gets past the guard cannot hang the
+overview.
+
+The split in how a debt moves money looks arbitrary and is not. Its **monthly
+payment behaves like a flow** — the ledger for months up to today, projected
+after that — because deriving it would take a payment the user already logged
+out of the balance twice. Its **one-off transfers behave like a deposit** — the
+downpayment, the disbursement, a lump off the principal are derived on their
+date and never logged, with nullable account columns for exactly the reason
+`fin_deposits` has them. The balance owed is neither: it amortises
+unconditionally, because what you owe the bank does not depend on whether you
+remembered to write the payment down. `asset_value` carries what the borrowing
+bought, on the debt rather than in an assets table, so net worth through a flat
+purchase is honest instead of showing a loss the size of the mortgage; it is
+held flat, since nobody typed an appreciation assumption and inventing one would
+be the false precision the `stock_growth_pct` box exists to avoid.
 
 Two consequences worth knowing. Net worth is projected **forward only**: valuing
 holdings in the past would need historical prices this app does not store, so

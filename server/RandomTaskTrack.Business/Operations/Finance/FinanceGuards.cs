@@ -87,6 +87,56 @@ internal static class FinanceGuards
     }
 
     /// <summary>
+    /// The two ends of a debt, checked together, and the one arithmetic rule it
+    /// has to satisfy.
+    ///
+    /// A payment at or below the first month's interest never touches the
+    /// principal: the balance grows every month, the schedule runs to its
+    /// 50-year cap, and the projection shows a debt that is never paid off. It
+    /// is a typo — a decimal point, a yearly figure typed as a monthly one —
+    /// and catching it here is the difference between a sentence saying so and
+    /// a chart that is quietly nonsense for the next thirty years.
+    ///
+    /// This runs on the merged debt rather than on the request, because on
+    /// update the principal can come from the request and the rate from the
+    /// stored row, and neither half means anything without the other.
+    /// </summary>
+    public static async Task GuardDebtAsync(
+        Debt debt,
+        IFinanceRepository repository,
+        IUnitOfWork unitOfWork)
+    {
+        if (debt.EndsOn.HasValue && debt.EndsOn.Value < debt.StartsOn)
+        {
+            throw new BadRequestException(
+                "A debt cannot finish before it starts.",
+                ExceptionCodes.FINANCE_DEBT_IMPOSSIBLE,
+                "Check the start and end dates.");
+        }
+
+        decimal firstMonthInterest = debt.Principal * debt.AnnualRate / 100m / 12m;
+
+        if (debt.AnnualRate > 0 && debt.Payment <= firstMonthInterest)
+        {
+            throw new BadRequestException(
+                $"A payment of {debt.Payment:0.##} never clears this debt — the first month's interest alone is "
+                + $"{firstMonthInterest:0.##}.",
+                ExceptionCodes.FINANCE_DEBT_IMPOSSIBLE,
+                "Raise the payment, or check whether the rate is a yearly percentage.");
+        }
+
+        if (debt.DownPaymentAccountId.HasValue)
+        {
+            await ResolveAccountAsync(debt.DownPaymentAccountId.Value, repository, unitOfWork);
+        }
+
+        if (debt.DisbursesToAccountId.HasValue)
+        {
+            await ResolveAccountAsync(debt.DisbursesToAccountId.Value, repository, unitOfWork);
+        }
+    }
+
+    /// <summary>
     /// Names are what the dropdowns show, so two accounts called "Savings" is a
     /// typo every time. ux_fin_accounts_name would catch it, but as a
     /// constraint name rather than a sentence.

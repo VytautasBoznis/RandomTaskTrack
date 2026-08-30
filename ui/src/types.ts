@@ -582,6 +582,55 @@ export interface Deposit {
   updatedAt: string;
 }
 
+/** A lump off the principal, over and above the monthly payment. */
+export interface DebtPayment {
+  id: string;
+  debtId: string;
+  amount: number;
+  paidOn: string;
+  /** Named, the cash leaves it on paidOn. Null means you logged it yourself. */
+  accountId: string | null;
+  note: string | null;
+  createdAt: string;
+}
+
+/**
+ * A debt with its schedule run. Everything from `outstanding` down is amortised
+ * on the server, never stored, so deleting a chunk moves the payoff date back
+ * out on its own.
+ */
+export interface Debt {
+  id: string;
+  name: string;
+  /** What was borrowed at origination, not what is left. */
+  principal: number;
+  currency: string;
+  /** A percentage as the lender writes it: 3.25 means 3.25%. */
+  annualRate: number;
+  /** Monthly. */
+  payment: number;
+  startsOn: string;
+  /** The contract's last payment. Compare with paidOffOn. */
+  endsOn: string | null;
+  assetValue: number | null;
+  downPayment: number | null;
+  downPaymentAccountId: string | null;
+  disbursesToAccountId: string | null;
+  note: string | null;
+
+  outstanding: number;
+  outstandingBase: number;
+  assetValueBase: number | null;
+  paymentBase: number;
+  /** When the balance actually reaches zero. Null if the payment never clears it. */
+  paidOffOn: string | null;
+  /** Left standing on endsOn when the payments run out first — a lease residual. */
+  balloonBase: number;
+  /** Interest still to pay from this month on. What a chunk buys you. */
+  interestRemainingBase: number;
+  payments: DebtPayment[];
+}
+
 export interface FinanceTarget {
   id: string;
   label: string;
@@ -597,8 +646,14 @@ export interface FinanceOverview {
   cashBase: number;
   depositsBase: number;
   stocksBase: number;
+  /** What the debts bought, held flat. Only debts that have started. */
+  assetsBase: number;
+  /** Still owed across every debt, amortised to today. */
+  debtsBase: number;
+  /** Cash + deposits + holdings + assets − debts. */
   netWorthBase: number;
   monthlyIncomeBase: number;
+  /** Includes the payment on every debt still running, flow or no flow. */
   monthlyExpenseBase: number;
   /** The totals are short by these — say so rather than showing a flat number. */
   hasUnpricedHoldings: boolean;
@@ -606,6 +661,7 @@ export interface FinanceOverview {
   flows: FinanceFlow[];
   positions: Position[];
   deposits: Deposit[];
+  debts: Debt[];
   dividends: Dividend[];
   targets: FinanceTarget[];
   currencies: Currency[];
@@ -622,6 +678,10 @@ export interface ProjectionPoint {
   cash: number | null;
   deposits: number | null;
   stocks: number | null;
+  /** What the debts bought. Appears the month one starts. */
+  assets: number | null;
+  /** Still owed at month end. Positive — the chart negates it to draw it. */
+  debts: number | null;
   netWorth: number | null;
 }
 
@@ -690,6 +750,28 @@ export interface DepositDraft {
   maturesOn: string | null;
   sourceAccountId: string | null;
   targetAccountId: string | null;
+  note: string | null;
+}
+
+export interface DebtDraft {
+  name: string;
+  principal: number;
+  currency: string;
+  annualRate: number;
+  payment: number;
+  startsOn: string;
+  endsOn: string | null;
+  assetValue: number | null;
+  downPayment: number | null;
+  downPaymentAccountId: string | null;
+  disbursesToAccountId: string | null;
+  note: string | null;
+}
+
+export interface DebtPaymentDraft {
+  amount: number;
+  paidOn: string;
+  accountId: string | null;
   note: string | null;
 }
 

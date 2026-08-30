@@ -25,9 +25,23 @@ public class FinanceOverviewDto
     /// <summary>Positions at the last pulled price. Excludes holdings never priced.</summary>
     public decimal StocksBase { get; set; }
 
+    /// <summary>
+    /// What the debts bought, held flat. Only counts debts that have started —
+    /// a mortgage you sign next year has not got you a flat yet.
+    /// </summary>
+    public decimal AssetsBase { get; set; }
+
+    /// <summary>What is still owed across every debt, amortised to today.</summary>
+    public decimal DebtsBase { get; set; }
+
+    /// <summary>Cash + deposits + holdings + assets − debts.</summary>
     public decimal NetWorthBase { get; set; }
 
-    /// <summary>What the active flows say a typical month costs and earns.</summary>
+    /// <summary>
+    /// What the active flows say a typical month costs and earns. The expense
+    /// side includes the payment on every debt still running, because a
+    /// mortgage payment is an expense whether or not it is also a flow.
+    /// </summary>
     public decimal MonthlyIncomeBase { get; set; }
 
     public decimal MonthlyExpenseBase { get; set; }
@@ -39,6 +53,7 @@ public class FinanceOverviewDto
     public List<FinanceFlow> Flows { get; set; } = new();
     public List<PositionDto> Positions { get; set; } = new();
     public List<Deposit> Deposits { get; set; } = new();
+    public List<DebtDto> Debts { get; set; } = new();
     public List<Dividend> Dividends { get; set; } = new();
     public List<FinanceTarget> Targets { get; set; } = new();
     public List<Currency> Currencies { get; set; } = new();

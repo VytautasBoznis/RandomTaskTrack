@@ -127,6 +127,28 @@ export default function FinanceOverviewPane({ onUnauthorized }: { onUnauthorized
           <p className="figure">{money(overview.stocksBase)}</p>
         </section>
 
+        {/* Only once there is a debt. Two tiles reading €0 would be furniture
+            on the screen that gets looked at most. */}
+        {overview.assetsBase !== 0 && (
+          <section className="card tile">
+            <h2>Property</h2>
+            <p className="figure">{money(overview.assetsBase)}</p>
+            <p className="muted">Held flat — no appreciation assumed.</p>
+          </section>
+        )}
+
+        {overview.debtsBase !== 0 && (
+          <section className="card tile">
+            <h2>Owed</h2>
+            <p className="figure">−{money(overview.debtsBase)}</p>
+            <p className="muted">
+              Across {overview.debts.filter((d) => d.outstandingBase > 0).length} debt
+              {overview.debts.filter((d) => d.outstandingBase > 0).length === 1 ? '' : 's'}, already
+              taken off net worth.
+            </p>
+          </section>
+        )}
+
         <section className="card tile">
           <h2>A typical month</h2>
           <p className="figure">{money(monthlyNet)}</p>
@@ -175,6 +197,8 @@ export default function FinanceOverviewPane({ onUnauthorized }: { onUnauthorized
                 ? 'Holdings held flat at their last price.'
                 : `Holdings assumed to return ${growth}% a year.`}{' '}
               Deposits use their actual rate.
+              {overview.debtsBase !== 0 &&
+                ' What you owe hangs below the axis; the pale line is the difference.'}
             </p>
           </>
         )}

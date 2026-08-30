@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import FinanceAccounts from './FinanceAccounts';
+import FinanceDebts from './FinanceDebts';
 import FinanceDeposits from './FinanceDeposits';
 import FinanceInvestments from './FinanceInvestments';
 import FinanceLedger from './FinanceLedger';
@@ -7,7 +8,15 @@ import FinanceOverviewPane from './FinanceOverviewPane';
 import FinanceRecurring from './FinanceRecurring';
 import FinanceTargets from './FinanceTargets';
 
-type Pane = 'overview' | 'accounts' | 'recurring' | 'ledger' | 'investments' | 'deposits' | 'targets';
+type Pane =
+  | 'overview'
+  | 'accounts'
+  | 'recurring'
+  | 'ledger'
+  | 'investments'
+  | 'deposits'
+  | 'debts'
+  | 'targets';
 
 const PANES: { id: Pane; label: string }[] = [
   { id: 'overview', label: 'Overview' },
@@ -16,6 +25,7 @@ const PANES: { id: Pane; label: string }[] = [
   { id: 'ledger', label: 'Ledger' },
   { id: 'investments', label: 'Investments' },
   { id: 'deposits', label: 'Deposits' },
+  { id: 'debts', label: 'Debts' },
   { id: 'targets', label: 'Targets' },
 ];
 
@@ -45,6 +55,7 @@ export default function Finance({ onUnauthorized }: { onUnauthorized: () => void
       {pane === 'ledger' && <FinanceLedger onUnauthorized={onUnauthorized} />}
       {pane === 'investments' && <FinanceInvestments onUnauthorized={onUnauthorized} />}
       {pane === 'deposits' && <FinanceDeposits onUnauthorized={onUnauthorized} />}
+      {pane === 'debts' && <FinanceDebts onUnauthorized={onUnauthorized} />}
       {pane === 'targets' && <FinanceTargets onUnauthorized={onUnauthorized} />}
     </>
   );

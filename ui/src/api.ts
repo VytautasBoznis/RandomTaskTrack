@@ -7,6 +7,10 @@ import type {
   ConversationListItem,
   CredentialDraft,
   Dashboard,
+  Debt,
+  DebtDraft,
+  DebtPayment,
+  DebtPaymentDraft,
   Deposit,
   DepositDraft,
   Dividend,
@@ -481,6 +485,27 @@ export const updateDeposit = (id: string, draft: Partial<DepositDraft>) =>
 
 export const deleteDeposit = (id: string) =>
   request<{ success: boolean }>(`/finance/deposits/${id}`, { method: 'DELETE' });
+
+// The write answers with the stored row, not the schedule. Everything derived
+// hangs off the whole set of debts, so the caller reloads the overview rather
+// than patching one card and leaving the tiles behind.
+export const createDebt = (draft: DebtDraft) =>
+  request<{ debt: Debt }>('/finance/debts', { method: 'POST', body: JSON.stringify(draft) });
+
+export const updateDebt = (id: string, draft: Partial<DebtDraft>) =>
+  request<{ debt: Debt }>(`/finance/debts/${id}`, { method: 'PUT', body: JSON.stringify(draft) });
+
+export const deleteDebt = (id: string) =>
+  request<{ success: boolean }>(`/finance/debts/${id}`, { method: 'DELETE' });
+
+export const createDebtPayment = (debtId: string, draft: DebtPaymentDraft) =>
+  request<{ payment: DebtPayment }>(`/finance/debts/${debtId}/payments`, {
+    method: 'POST',
+    body: JSON.stringify(draft),
+  });
+
+export const deleteDebtPayment = (id: string) =>
+  request<{ success: boolean }>(`/finance/debts/payments/${id}`, { method: 'DELETE' });
 
 export const createTarget = (draft: TargetDraft) =>
   request<{ target: FinanceTarget }>('/finance/targets', { method: 'POST', body: JSON.stringify(draft) });

@@ -28,5 +28,17 @@ public class ProjectionPointDto
 
     public decimal? Deposits { get; set; }
     public decimal? Stocks { get; set; }
+
+    /// <summary>What the debts bought, held flat. Appears the month one starts.</summary>
+    public decimal? Assets { get; set; }
+
+    /// <summary>
+    /// Still owed at the end of the month, amortised. Positive — it is
+    /// subtracted from <see cref="NetWorth"/> here rather than carried negative,
+    /// so the chart can draw it below the axis without un-negating it twice.
+    /// </summary>
+    public decimal? Debts { get; set; }
+
+    /// <summary>Cash + deposits + stocks + assets − debts.</summary>
     public decimal? NetWorth { get; set; }
 }

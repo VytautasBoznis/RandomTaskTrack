@@ -282,6 +282,54 @@ public class FinanceController : BaseController
         return Ok(await _operationFactory.Get<DeleteDepositOperation>().Run(request));
     }
 
+    // ── Debts ────────────────────────────────────────────────────────────────
+
+    [HttpPost("debts")]
+    public async Task<IActionResult> CreateDebt(CreateDebtRequest request)
+    {
+        request.SessionUserData = GetSessionModelFromJwt();
+
+        return Ok(await _operationFactory.Get<CreateDebtOperation>().Run(request));
+    }
+
+    [HttpPut("debts/{id:guid}")]
+    public async Task<IActionResult> UpdateDebt(Guid id, UpdateDebtRequest request)
+    {
+        request.Id = id;
+        request.SessionUserData = GetSessionModelFromJwt();
+
+        return Ok(await _operationFactory.Get<UpdateDebtOperation>().Run(request));
+    }
+
+    [HttpDelete("debts/{id:guid}")]
+    public async Task<IActionResult> DeleteDebt(Guid id)
+    {
+        var request = new DeleteDebtRequest { Id = id, SessionUserData = GetSessionModelFromJwt() };
+
+        return Ok(await _operationFactory.Get<DeleteDebtOperation>().Run(request));
+    }
+
+    /// <summary>
+    /// A lump sum off the principal. Nested under the debt because it is an
+    /// event under its terms, the same way a trade sits under a holding.
+    /// </summary>
+    [HttpPost("debts/{id:guid}/payments")]
+    public async Task<IActionResult> CreateDebtPayment(Guid id, CreateDebtPaymentRequest request)
+    {
+        request.DebtId = id;
+        request.SessionUserData = GetSessionModelFromJwt();
+
+        return Ok(await _operationFactory.Get<CreateDebtPaymentOperation>().Run(request));
+    }
+
+    [HttpDelete("debts/payments/{id:guid}")]
+    public async Task<IActionResult> DeleteDebtPayment(Guid id)
+    {
+        var request = new DeleteDebtPaymentRequest { Id = id, SessionUserData = GetSessionModelFromJwt() };
+
+        return Ok(await _operationFactory.Get<DeleteDebtPaymentOperation>().Run(request));
+    }
+
     // ── Targets ──────────────────────────────────────────────────────────────
 
     [HttpPost("targets")]

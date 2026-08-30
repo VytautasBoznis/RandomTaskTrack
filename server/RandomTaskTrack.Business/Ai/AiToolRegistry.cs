@@ -240,7 +240,7 @@ public class AiToolRegistry : IAiToolRegistry
         new()
         {
             Name = AiToolNames.QueryFinance,
-            Description = "The money picture right now: the accounts and what is in each, deposits, holdings, net worth, the recurring flows, expected dividends and targets. Every base figure is already converted to the base currency. Call this before saying anything about money, and to learn the account ids the other tools take.",
+            Description = "The money picture right now: the accounts and what is in each, deposits, holdings, debts and what is still owed on them, net worth, the recurring flows, expected dividends and targets. Every base figure is already converted to the base currency, and net_worth already has the debts taken off it. Call this before saying anything about money, and to learn the account ids and debt ids the other tools take.",
             InputSchema = """
                 {"type":"object","properties":{},"additionalProperties":false}
                 """
@@ -248,7 +248,7 @@ public class AiToolRegistry : IAiToolRegistry
         new()
         {
             Name = AiToolNames.ProjectFinances,
-            Description = "Project cash, deposits, holdings and net worth forward, month by month. Use this for any 'when will I have X' or 'can I afford Y' question instead of doing the arithmetic yourself.",
+            Description = "Project cash, deposits, holdings, property, what is owed and net worth forward, month by month. Debt payments stop of their own accord the month the balance clears. Use this for any 'when will I have X', 'can I afford Y' or 'what if I overpay the mortgage' question instead of doing the arithmetic yourself.",
             InputSchema = """
                 {
                   "type":"object",
@@ -453,6 +453,51 @@ public class AiToolRegistry : IAiToolRegistry
         },
         new()
         {
+            Name = AiToolNames.CreateDebt,
+            Description = "Record money owed on a schedule — a mortgage, a car loan, a lease. The projection amortises it: interest accrues on the balance, the monthly payment covers it and takes the rest off the principal, and the payment stops of its own accord the month the balance clears. Do not also create a flow for the payment; that would count it twice. Give asset_value when the borrowing bought something, or signing for a flat reads as a loss the size of the mortgage. The two account fields move their own money on starts_on — set them only for a debt being taken out now, never for one the user already has, whose cash moved long ago.",
+            InputSchema = """
+                {
+                  "type":"object",
+                  "properties":{
+                    "name":{"type":"string"},
+                    "principal":{"type":"number","description":"What is borrowed at origination, not what is left."},
+                    "currency":{"type":"string"},
+                    "annual_rate":{"type":"number","description":"A percentage as the lender writes it: 3.25 means 3.25%, not 0.0325. Zero is legal and means an interest-free instalment plan."},
+                    "payment":{"type":"number","description":"Monthly. Must exceed the first month's interest (principal x rate / 12) or it never clears the debt and will be refused."},
+                    "starts_on":{"type":"string","description":"YYYY-MM-DD. The first payment."},
+                    "ends_on":{"type":"string","description":"YYYY-MM-DD. The contractual last payment. Omit for 'until it is paid off'. Any balance still standing on this date is reported as a balloon."},
+                    "asset_value":{"type":"number","description":"What the borrowing bought, at today's value. Held flat — no appreciation is assumed."},
+                    "down_payment":{"type":"number","description":"What was put down."},
+                    "down_payment_account_id":{"type":"string","description":"The account the downpayment leaves on starts_on, from query_finance. Omit for a debt the user already has."},
+                    "disburses_to_account_id":{"type":"string","description":"Where the borrowed principal lands on starts_on. Omit for a mortgage: the bank pays the seller and the money never touches an account."},
+                    "note":{"type":"string"}
+                  },
+                  "required":["name","principal","currency","annual_rate","payment","starts_on"],
+                  "additionalProperties":false
+                }
+                """
+        },
+        new()
+        {
+            Name = AiToolNames.PayOffDebt,
+            Description = "Put a lump sum against a debt's principal, over and above the monthly payment. This is what pulls the payoff date in — call project_finances afterwards to say by how much rather than estimating it. A future paid_on is legitimate and is how to try an overpayment on before making it.",
+            InputSchema = """
+                {
+                  "type":"object",
+                  "properties":{
+                    "debt_id":{"type":"string","description":"From query_finance."},
+                    "amount":{"type":"number","description":"In the debt's own currency."},
+                    "paid_on":{"type":"string","description":"YYYY-MM-DD."},
+                    "account_id":{"type":"string","description":"The account it comes out of. Omit if the user logged the payment as an entry themselves."},
+                    "note":{"type":"string"}
+                  },
+                  "required":["debt_id","amount","paid_on"],
+                  "additionalProperties":false
+                }
+                """
+        },
+        new()
+        {
             Name = AiToolNames.CreateTarget,
             Description = "Put a mark on the projection graph. An amount alone draws a goal line, a date alone marks a milestone, both together is a point to hit.",
             InputSchema = """
@@ -588,6 +633,8 @@ public class AiToolRegistry : IAiToolRegistry
                 AiToolNames.LogTrade => await LogTradeAsync(input, unitOfWork),
                 AiToolNames.CreateDividend => await CreateDividendAsync(input, unitOfWork),
                 AiToolNames.CreateDeposit => await CreateDepositAsync(input, unitOfWork),
+                AiToolNames.CreateDebt => await CreateDebtAsync(input, unitOfWork),
+                AiToolNames.PayOffDebt => await PayOffDebtAsync(input, unitOfWork),
                 AiToolNames.CreateTarget => await CreateTargetAsync(input, unitOfWork),
                 AiToolNames.QueryLearning => await QueryLearningAsync(input, unitOfWork),
                 AiToolNames.CreateLearningStep => await CreateLearningStepAsync(input, unitOfWork),
@@ -835,6 +882,10 @@ public class AiToolRegistry : IAiToolRegistry
             cash = overview.CashBase,
             deposits = overview.DepositsBase,
             stocks = overview.StocksBase,
+            property_assets = overview.AssetsBase,
+            owed = overview.DebtsBase,
+
+            // Already net of `owed` — do not subtract the debts again.
             net_worth = overview.NetWorthBase,
             monthly_income = overview.MonthlyIncomeBase,
             monthly_expenses = overview.MonthlyExpenseBase,
@@ -898,6 +949,36 @@ public class AiToolRegistry : IAiToolRegistry
                 source_account_id = d.SourceAccountId,
                 target_account_id = d.TargetAccountId
             }),
+            debts = overview.Debts.Select(d => new
+            {
+                id = d.Id,
+                name = d.Name,
+                borrowed = d.Principal,
+                currency = d.Currency,
+                annual_rate_pct = d.AnnualRate,
+                monthly_payment = d.Payment,
+                starts_on = d.StartsOn.ToString("yyyy-MM-dd"),
+
+                // The contract's date. paid_off_on is the one that answers
+                // "when am I free of this" — they differ once a lump lands.
+                contract_ends_on = d.EndsOn?.ToString("yyyy-MM-dd"),
+                outstanding = d.Outstanding,
+                outstanding_base = d.OutstandingBase,
+                paid_off_on = d.PaidOffOn?.ToString("yyyy-MM"),
+
+                // Null means the payment never clears it — say so rather than
+                // quoting a payoff date there is not one of.
+                clears = d.PaidOffOn is not null,
+                interest_remaining_base = d.InterestRemainingBase,
+                balloon_base = d.BalloonBase,
+                asset_value_base = d.AssetValueBase,
+                overpayments = d.Payments.Select(p => new
+                {
+                    id = p.Id,
+                    amount = p.Amount,
+                    paid_on = p.PaidOn.ToString("yyyy-MM-dd")
+                })
+            }),
             dividends = overview.Dividends.Select(d => new
             {
                 id = d.Id,
@@ -944,6 +1025,11 @@ public class AiToolRegistry : IAiToolRegistry
                 cash = p.Cash,
                 deposits = p.Deposits,
                 stocks = p.Stocks,
+                property_assets = p.Assets,
+
+                // Positive: what is still owed. net_worth already has it taken
+                // off, so reporting both does not mean subtracting twice.
+                owed = p.Debts,
                 net_worth = p.NetWorth
             })
         });
@@ -1259,6 +1345,96 @@ public class AiToolRegistry : IAiToolRegistry
         await _financeRepository.CreateDepositAsync(deposit, unitOfWork);
 
         return Serialize(new { created = true, id = deposit.Id });
+    }
+
+    private async Task<string> CreateDebtAsync(JsonElement input, IUnitOfWork unitOfWork)
+    {
+        var debt = new Debt
+        {
+            Id = Guid.NewGuid(),
+            Name = GetRequiredString(input, "name"),
+            Principal = GetRequiredDecimal(input, "principal"),
+            Currency = await ResolveCurrencyAsync(GetRequiredString(input, "currency"), unitOfWork),
+            AnnualRate = GetRequiredDecimal(input, "annual_rate"),
+            Payment = GetRequiredDecimal(input, "payment"),
+            StartsOn = GetDate(input, "starts_on") ?? throw new InvalidOperationException("starts_on is required (YYYY-MM-DD)."),
+            EndsOn = GetDate(input, "ends_on"),
+            AssetValue = GetDecimal(input, "asset_value"),
+            DownPayment = GetDecimal(input, "down_payment"),
+            DownPaymentAccountId = await OptionalAccountAsync(input, "down_payment_account_id", unitOfWork),
+            DisbursesToAccountId = await OptionalAccountAsync(input, "disburses_to_account_id", unitOfWork),
+            Note = GetString(input, "note")
+        };
+
+        // 3.25 means 3.25%. A rate above 100 is almost always a fraction typed
+        // as a percentage twice over, and it would silently wreck the schedule.
+        if (debt.AnnualRate is < 0 or > 100)
+        {
+            throw new InvalidOperationException("annual_rate is a percentage between 0 and 100: 3.25 means 3.25%.");
+        }
+
+        if (debt.Payment <= 0)
+        {
+            throw new InvalidOperationException("payment must be greater than zero.");
+        }
+
+        if (debt.EndsOn.HasValue && debt.EndsOn.Value < debt.StartsOn)
+        {
+            throw new InvalidOperationException("ends_on cannot be before starts_on.");
+        }
+
+        if (debt.DownPaymentAccountId.HasValue && debt.DownPayment is null)
+        {
+            throw new InvalidOperationException("Set down_payment too if it comes out of an account.");
+        }
+
+        // The rule that actually bites. Left to the schedule it would run to its
+        // 50-year cap and quietly report a debt that is never paid off.
+        decimal firstMonthInterest = debt.Principal * debt.AnnualRate / 100m / 12m;
+
+        if (debt.AnnualRate > 0 && debt.Payment <= firstMonthInterest)
+        {
+            throw new InvalidOperationException(
+                $"A payment of {debt.Payment:0.##} never clears this debt — the first month's interest alone is "
+                + $"{firstMonthInterest:0.##}. Check the payment, or whether the rate is a yearly percentage.");
+        }
+
+        await _financeRepository.CreateDebtAsync(debt, unitOfWork);
+
+        return Serialize(new { created = true, id = debt.Id });
+    }
+
+    private async Task<string> PayOffDebtAsync(JsonElement input, IUnitOfWork unitOfWork)
+    {
+        Guid debtId = GetRequiredGuid(input, "debt_id");
+
+        Debt debt = await _financeRepository.GetDebtAsync(debtId, unitOfWork)
+                    ?? throw new InvalidOperationException("No debt with that id — call query_finance for the current list.");
+
+        var payment = new DebtPayment
+        {
+            Id = Guid.NewGuid(),
+            DebtId = debt.Id,
+            Amount = GetRequiredDecimal(input, "amount"),
+            PaidOn = GetDate(input, "paid_on") ?? throw new InvalidOperationException("paid_on is required (YYYY-MM-DD)."),
+            AccountId = await OptionalAccountAsync(input, "account_id", unitOfWork),
+            Note = GetString(input, "note")
+        };
+
+        if (payment.Amount <= 0)
+        {
+            throw new InvalidOperationException("amount must be greater than zero.");
+        }
+
+        if (payment.PaidOn < debt.StartsOn)
+        {
+            throw new InvalidOperationException(
+                $"That is before {debt.Name} starts on {debt.StartsOn:yyyy-MM-dd}.");
+        }
+
+        await _financeRepository.CreateDebtPaymentAsync(payment, unitOfWork);
+
+        return Serialize(new { created = true, id = payment.Id, debt_id = debt.Id });
     }
 
     private async Task<string> CreateTargetAsync(JsonElement input, IUnitOfWork unitOfWork)

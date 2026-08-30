@@ -30,6 +30,13 @@ public class FinanceRepository : IFinanceRepository
     private const string DepositColumns =
         "id, name, principal, currency, annual_rate, compounding, opened_on, matures_on, source_account_id, target_account_id, note, created_at, updated_at";
 
+    private const string DebtColumns =
+        "id, name, principal, currency, annual_rate, payment, starts_on, ends_on, asset_value, " +
+        "down_payment, down_payment_account_id, disburses_to_account_id, note, created_at, updated_at";
+
+    private const string DebtPaymentColumns =
+        "id, debt_id, amount, paid_on, account_id, note, created_at";
+
     private const string TargetColumns =
         "id, label, target_on, amount, note, created_at";
 
@@ -111,7 +118,10 @@ public class FinanceRepository : IFinanceRepository
             @"SELECT (SELECT count(*) FROM tracker.fin_entries  WHERE account_id = @id)
                    + (SELECT count(*) FROM tracker.fin_holdings WHERE account_id = @id)
                    + (SELECT count(*) FROM tracker.fin_deposits
-                      WHERE source_account_id = @id OR target_account_id = @id)",
+                      WHERE source_account_id = @id OR target_account_id = @id)
+                   + (SELECT count(*) FROM tracker.fin_debts
+                      WHERE down_payment_account_id = @id OR disburses_to_account_id = @id)
+                   + (SELECT count(*) FROM tracker.fin_debt_payments WHERE account_id = @id)",
             new { id },
             unitOfWork.Transaction);
     }
@@ -677,6 +687,126 @@ public class FinanceRepository : IFinanceRepository
         deposit.TargetAccountId,
         deposit.Note
     };
+
+    // ── Debts ────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Soonest to start first, which puts the debt you are still paying above
+    /// the one you signed for next year.
+    /// </summary>
+    public async Task<List<Debt>> GetDebtsAsync(IUnitOfWork unitOfWork)
+    {
+        var rows = await unitOfWork.Connection.QueryAsync<Debt>(
+            $@"SELECT {DebtColumns}
+               FROM tracker.fin_debts
+               ORDER BY starts_on, name",
+            transaction: unitOfWork.Transaction);
+
+        return rows.ToList();
+    }
+
+    public async Task<Debt?> GetDebtAsync(Guid id, IUnitOfWork unitOfWork)
+    {
+        return await unitOfWork.Connection.QueryFirstOrDefaultAsync<Debt>(
+            $"SELECT {DebtColumns} FROM tracker.fin_debts WHERE id = @id",
+            new { id },
+            unitOfWork.Transaction);
+    }
+
+    public async Task CreateDebtAsync(Debt debt, IUnitOfWork unitOfWork)
+    {
+        await unitOfWork.Connection.ExecuteAsync(
+            @"INSERT INTO tracker.fin_debts
+                  (id, name, principal, currency, annual_rate, payment, starts_on, ends_on,
+                   asset_value, down_payment, down_payment_account_id, disburses_to_account_id, note)
+              VALUES (@Id, @Name, @Principal, @Currency, @AnnualRate, @Payment, @StartsOn, @EndsOn,
+                      @AssetValue, @DownPayment, @DownPaymentAccountId, @DisbursesToAccountId, @Note)",
+            ToDebtParameters(debt),
+            unitOfWork.Transaction);
+    }
+
+    public async Task UpdateDebtAsync(Debt debt, IUnitOfWork unitOfWork)
+    {
+        await unitOfWork.Connection.ExecuteAsync(
+            @"UPDATE tracker.fin_debts
+              SET name                    = @Name,
+                  principal               = @Principal,
+                  currency                = @Currency,
+                  annual_rate             = @AnnualRate,
+                  payment                 = @Payment,
+                  starts_on               = @StartsOn,
+                  ends_on                 = @EndsOn,
+                  asset_value             = @AssetValue,
+                  down_payment            = @DownPayment,
+                  down_payment_account_id = @DownPaymentAccountId,
+                  disburses_to_account_id = @DisbursesToAccountId,
+                  note                    = @Note,
+                  updated_at              = now()
+              WHERE id = @Id",
+            ToDebtParameters(debt),
+            unitOfWork.Transaction);
+    }
+
+    public async Task<bool> DeleteDebtAsync(Guid id, IUnitOfWork unitOfWork)
+    {
+        int affected = await unitOfWork.Connection.ExecuteAsync(
+            "DELETE FROM tracker.fin_debts WHERE id = @id",
+            new { id },
+            unitOfWork.Transaction);
+
+        return affected > 0;
+    }
+
+    private static object ToDebtParameters(Debt debt) => new
+    {
+        debt.Id,
+        debt.Name,
+        debt.Principal,
+        debt.Currency,
+        debt.AnnualRate,
+        debt.Payment,
+        debt.StartsOn,
+        debt.EndsOn,
+        debt.AssetValue,
+        debt.DownPayment,
+        debt.DownPaymentAccountId,
+        debt.DisbursesToAccountId,
+        debt.Note
+    };
+
+    /// <summary>
+    /// In date order, which is the order the schedule has to apply them in — a
+    /// chunk changes what every month after it costs.
+    /// </summary>
+    public async Task<List<DebtPayment>> GetDebtPaymentsAsync(IUnitOfWork unitOfWork)
+    {
+        var rows = await unitOfWork.Connection.QueryAsync<DebtPayment>(
+            $@"SELECT {DebtPaymentColumns}
+               FROM tracker.fin_debt_payments
+               ORDER BY paid_on, created_at",
+            transaction: unitOfWork.Transaction);
+
+        return rows.ToList();
+    }
+
+    public async Task CreateDebtPaymentAsync(DebtPayment payment, IUnitOfWork unitOfWork)
+    {
+        await unitOfWork.Connection.ExecuteAsync(
+            @"INSERT INTO tracker.fin_debt_payments (id, debt_id, amount, paid_on, account_id, note)
+              VALUES (@Id, @DebtId, @Amount, @PaidOn, @AccountId, @Note)",
+            new { payment.Id, payment.DebtId, payment.Amount, payment.PaidOn, payment.AccountId, payment.Note },
+            unitOfWork.Transaction);
+    }
+
+    public async Task<bool> DeleteDebtPaymentAsync(Guid id, IUnitOfWork unitOfWork)
+    {
+        int affected = await unitOfWork.Connection.ExecuteAsync(
+            "DELETE FROM tracker.fin_debt_payments WHERE id = @id",
+            new { id },
+            unitOfWork.Transaction);
+
+        return affected > 0;
+    }
 
     // ── Targets ──────────────────────────────────────────────────────────────
 

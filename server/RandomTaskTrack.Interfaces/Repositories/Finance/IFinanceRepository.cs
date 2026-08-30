@@ -90,6 +90,23 @@ public interface IFinanceRepository
     Task UpdateDepositAsync(Deposit deposit, IUnitOfWork unitOfWork);
     Task<bool> DeleteDepositAsync(Guid id, IUnitOfWork unitOfWork);
 
+    // ── Debts ────────────────────────────────────────────────────────────────
+    Task<List<Debt>> GetDebtsAsync(IUnitOfWork unitOfWork);
+    Task<Debt?> GetDebtAsync(Guid id, IUnitOfWork unitOfWork);
+    Task CreateDebtAsync(Debt debt, IUnitOfWork unitOfWork);
+    Task UpdateDebtAsync(Debt debt, IUnitOfWork unitOfWork);
+    Task<bool> DeleteDebtAsync(Guid id, IUnitOfWork unitOfWork);
+
+    /// <summary>
+    /// Every lump sum, not one debt's. The schedules are amortised for the whole
+    /// set on every overview, so one query beats N — the same bargain
+    /// <see cref="GetTradesAsync"/> makes.
+    /// </summary>
+    Task<List<DebtPayment>> GetDebtPaymentsAsync(IUnitOfWork unitOfWork);
+
+    Task CreateDebtPaymentAsync(DebtPayment payment, IUnitOfWork unitOfWork);
+    Task<bool> DeleteDebtPaymentAsync(Guid id, IUnitOfWork unitOfWork);
+
     // ── Targets ──────────────────────────────────────────────────────────────
     Task<List<FinanceTarget>> GetTargetsAsync(IUnitOfWork unitOfWork);
     Task<FinanceTarget?> GetTargetAsync(Guid id, IUnitOfWork unitOfWork);

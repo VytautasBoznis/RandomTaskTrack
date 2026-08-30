@@ -322,6 +322,11 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IValidator<CreateDepositRequest>, CreateDepositRequestValidator>();
         services.AddSingleton<IValidator<UpdateDepositRequest>, UpdateDepositRequestValidator>();
         services.AddSingleton<IValidator<DeleteDepositRequest>, DeleteDepositRequestValidator>();
+        services.AddSingleton<IValidator<CreateDebtRequest>, CreateDebtRequestValidator>();
+        services.AddSingleton<IValidator<UpdateDebtRequest>, UpdateDebtRequestValidator>();
+        services.AddSingleton<IValidator<DeleteDebtRequest>, DeleteDebtRequestValidator>();
+        services.AddSingleton<IValidator<CreateDebtPaymentRequest>, CreateDebtPaymentRequestValidator>();
+        services.AddSingleton<IValidator<DeleteDebtPaymentRequest>, DeleteDebtPaymentRequestValidator>();
         services.AddSingleton<IValidator<CreateTargetRequest>, CreateTargetRequestValidator>();
         services.AddSingleton<IValidator<UpdateTargetRequest>, UpdateTargetRequestValidator>();
         services.AddSingleton<IValidator<DeleteTargetRequest>, DeleteTargetRequestValidator>();
@@ -436,6 +441,11 @@ public static class ServiceCollectionExtensions
         services.AddScoped<CreateDepositOperation>();
         services.AddScoped<UpdateDepositOperation>();
         services.AddScoped<DeleteDepositOperation>();
+        services.AddScoped<CreateDebtOperation>();
+        services.AddScoped<UpdateDebtOperation>();
+        services.AddScoped<DeleteDebtOperation>();
+        services.AddScoped<CreateDebtPaymentOperation>();
+        services.AddScoped<DeleteDebtPaymentOperation>();
         services.AddScoped<CreateTargetOperation>();
         services.AddScoped<UpdateTargetOperation>();
         services.AddScoped<DeleteTargetOperation>();

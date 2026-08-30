@@ -29,6 +29,8 @@ public static class AiToolNames
     public const string LogTrade = "log_trade";
     public const string CreateDividend = "create_dividend";
     public const string CreateDeposit = "create_deposit";
+    public const string CreateDebt = "create_debt";
+    public const string PayOffDebt = "pay_off_debt";
     public const string CreateTarget = "create_target";
 
     // Learning. query_learning is the only source of a claim about a path's

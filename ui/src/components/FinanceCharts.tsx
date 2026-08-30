@@ -16,15 +16,22 @@ import {
 import type { FinanceTarget, ProjectionPoint } from '../types';
 
 /**
- * Categorical slots 1-3, stepped for a dark surface, assigned in fixed order
+ * Categorical slots 1-5, stepped for a dark surface, assigned in fixed order
  * per chart — never cycled, never by rank. Validated as a set against this
- * app's card surface (#1e2127) on all pairs: worst CVD ΔE 9.4, worst
- * normal-vision ΔE 20.9, all three ≥ 3:1 contrast.
+ * app's card surface (#1e2127) on the adjacent pairlist the stack actually
+ * puts on screen: worst CVD ΔE 8.4, worst normal-vision ΔE 19.3, all five
+ * ≥ 3:1 contrast.
+ *
+ * Five is the ceiling here, and it is a measured one rather than a taste:
+ * no sixth hue in the ramp clears the all-pairs floors against these five.
+ * That is why net worth below is drawn in ink instead — see NET.
  */
 const SERIES = {
   one: '#3987e5',
   two: '#d95926',
   three: '#199e70',
+  four: '#c98500',
+  five: '#d55181',
 };
 
 // Chrome stays in ink, never in a series colour — a coloured mark beside a
@@ -32,6 +39,15 @@ const SERIES = {
 const GRID = '#2c313a';
 const AXIS = '#8b93a1';
 const SURFACE = '#1e2127';
+
+/**
+ * Net worth is not a sixth category, it is the total of the other five, so it
+ * does not take a categorical hue — it takes primary ink. Being the only line
+ * on a chart of fills, its identity is carried by its form rather than its
+ * colour, which is what keeps it legible to a reader who cannot separate the
+ * hues at all. Distinct from AXIS, which the target rules use.
+ */
+const NET = '#e6e8ec';
 
 const money = (value: number, currency: string) =>
   new Intl.NumberFormat(undefined, {
@@ -44,24 +60,27 @@ const monthLabel = (month: string) =>
   new Date(`${month}T00:00:00`).toLocaleDateString(undefined, { month: 'short', year: '2-digit' });
 
 /** Recharts hands the payload back untyped; this is the shape we put in. */
-type Row = ProjectionPoint & { label: string };
+type Row = ProjectionPoint & { label: string; owed: number };
 
 /**
- * `absolute` un-negates the expense series, which is drawn below the axis to
- * carry its direction but should still read as the amount it is.
+ * `absolute` names the series that are drawn below the axis to carry a
+ * direction — expenses, money owed — and should still read as the amount they
+ * are. By name rather than by a flag over the whole tooltip, because the net
+ * worth line shares a chart with one of them and can legitimately be negative:
+ * flipping it would turn "you are 12k under water" into "you have 12k".
  */
 function ChartTooltip({
   active,
   payload,
   label,
   currency,
-  absolute = false,
+  absolute = [],
 }: {
   active?: boolean;
   payload?: { name?: string; value?: number; color?: string }[];
   label?: string;
   currency: string;
-  absolute?: boolean;
+  absolute?: string[];
 }) {
   if (!active || !payload || payload.length === 0) {
     return null;
@@ -72,12 +91,13 @@ function ChartTooltip({
       <p className="chart-tip-head">{label}</p>
       {payload.map((item) => {
         const value = item.value ?? 0;
+        const flip = item.name !== undefined && absolute.includes(item.name);
 
         return (
           <p key={item.name}>
             <span className="chart-swatch" style={{ background: item.color }} />
             {item.name}
-            <b>{money(absolute ? Math.abs(value) : value, currency)}</b>
+            <b>{money(flip ? Math.abs(value) : value, currency)}</b>
           </p>
         );
       })}
@@ -90,6 +110,13 @@ function ChartTooltip({
  * the past would need historical prices the app does not store, so the actual
  * months carry no balances and the area simply starts at today rather than
  * drawing a plausible line from nothing.
+ *
+ * With a debt on the books this becomes a balance sheet: the things you own
+ * stack above the axis, what you owe hangs below it, and the ink line across
+ * the middle is the difference. Without one, none of that machinery is drawn —
+ * the top of the stack is already net worth, and a line tracing it plus a
+ * legend entry reading "Owed €0" would be two pieces of furniture earning
+ * nothing.
  */
 export function NetWorthChart({
   points,
@@ -102,11 +129,20 @@ export function NetWorthChart({
 }) {
   const rows: Row[] = points
     .filter((p) => p.netWorth !== null)
-    .map((p) => ({ ...p, label: monthLabel(p.month) }));
+    .map((p) => ({
+      ...p,
+      label: monthLabel(p.month),
+      // Recharts stacks by sign, so the negation is what hangs the debt below
+      // the axis. The tooltip un-negates it.
+      owed: -(p.debts ?? 0),
+    }));
 
   if (rows.length === 0) {
     return <p className="empty">Nothing to project yet — add some money first.</p>;
   }
+
+  const hasAssets = rows.some((r) => (r.assets ?? 0) !== 0);
+  const hasDebts = rows.some((r) => (r.debts ?? 0) !== 0);
 
   const first = rows[0];
   const last = rows[rows.length - 1];
@@ -126,7 +162,11 @@ export function NetWorthChart({
 
   return (
     <ResponsiveContainer width="100%" height={300}>
-      <AreaChart data={rows} margin={{ top: 8, right: 16, bottom: 0, left: 8 }}>
+      <AreaChart
+        data={rows}
+        margin={{ top: 8, right: 16, bottom: 0, left: 8 }}
+        stackOffset="sign"
+      >
         {/* Solid hairlines. Horizontal only — vertical rules add noise a time
             axis already carries. */}
         <CartesianGrid stroke={GRID} strokeWidth={1} vertical={false} />
@@ -138,8 +178,12 @@ export function NetWorthChart({
           width={72}
           tickFormatter={(v: number) => money(v, currency)}
         />
-        <Tooltip content={<ChartTooltip currency={currency} />} />
+        <Tooltip content={<ChartTooltip currency={currency} absolute={['Owed']} />} />
         <Legend iconType="square" wrapperStyle={{ paddingTop: 8 }} />
+
+        {/* The axis has to be visible once anything hangs below it: it is the
+            line the two halves are read against. */}
+        {hasDebts && <ReferenceLine y={0} stroke={GRID} strokeWidth={1} />}
 
         {/* 2px surface gap between stacked fills rather than a border drawn
             round each one. */}
@@ -173,6 +217,48 @@ export function NetWorthChart({
           fill={SERIES.three}
           fillOpacity={0.85}
         />
+
+        {hasAssets && (
+          <Area
+            type="monotone"
+            dataKey="assets"
+            name="Property"
+            stackId="net"
+            stroke={SURFACE}
+            strokeWidth={2}
+            fill={SERIES.four}
+            fillOpacity={0.85}
+          />
+        )}
+
+        {hasDebts && (
+          <Area
+            type="monotone"
+            dataKey="owed"
+            name="Owed"
+            stackId="net"
+            stroke={SURFACE}
+            strokeWidth={2}
+            fill={SERIES.five}
+            fillOpacity={0.85}
+          />
+        )}
+
+        {/* Drawn last so it sits over the fills. No dots: 360 markers on a
+            30-year projection is a solid bar, not a series. */}
+        {hasDebts && (
+          <Area
+            type="monotone"
+            dataKey="netWorth"
+            name="Net worth"
+            stroke={NET}
+            strokeWidth={2}
+            fill="none"
+            fillOpacity={0}
+            dot={false}
+            activeDot={{ r: 4, fill: NET, stroke: SURFACE, strokeWidth: 2 }}
+          />
+        )}
 
         {targets
           .filter((t) => t.amount !== null)
@@ -245,7 +331,7 @@ export function CashFlowChart({ points, currency }: { points: ProjectionPoint[];
         />
         <Tooltip
           cursor={{ fill: 'rgba(255,255,255,0.04)' }}
-          content={<ChartTooltip currency={currency} absolute />}
+          content={<ChartTooltip currency={currency} absolute={['Out']} />}
         />
         <Legend iconType="square" wrapperStyle={{ paddingTop: 8 }} />
         <ReferenceLine y={0} stroke={GRID} strokeWidth={1} />
@@ -275,6 +361,12 @@ export function CashFlowChart({ points, currency }: { points: ProjectionPoint[];
 export function ProjectionTable({ points, currency }: { points: ProjectionPoint[]; currency: string }) {
   const [open, setOpen] = useState(false);
 
+  // Two more columns only when there is something to put in them. Nine columns
+  // of which two read €0 all the way down is what makes a table on a tablet
+  // scroll sideways for nothing.
+  const hasAssets = points.some((p) => (p.assets ?? 0) !== 0);
+  const hasDebts = points.some((p) => (p.debts ?? 0) !== 0);
+
   return (
     <>
       <button type="button" className="ghost" onClick={() => setOpen(!open)}>
@@ -292,6 +384,8 @@ export function ProjectionTable({ points, currency }: { points: ProjectionPoint[
                 <th>Cash</th>
                 <th>Deposits</th>
                 <th>Holdings</th>
+                {hasAssets && <th>Property</th>}
+                {hasDebts && <th>Owed</th>}
                 <th>Net worth</th>
               </tr>
             </thead>
@@ -307,6 +401,8 @@ export function ProjectionTable({ points, currency }: { points: ProjectionPoint[
                   <td>{p.cash === null ? '—' : money(p.cash, currency)}</td>
                   <td>{p.deposits === null ? '—' : money(p.deposits, currency)}</td>
                   <td>{p.stocks === null ? '—' : money(p.stocks, currency)}</td>
+                  {hasAssets && <td>{p.assets === null ? '—' : money(p.assets, currency)}</td>}
+                  {hasDebts && <td>{p.debts === null ? '—' : money(p.debts, currency)}</td>}
                   <td>{p.netWorth === null ? '—' : money(p.netWorth, currency)}</td>
                 </tr>
               ))}

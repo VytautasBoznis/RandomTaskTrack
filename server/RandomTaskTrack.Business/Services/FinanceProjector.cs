@@ -31,6 +31,16 @@ namespace RandomTaskTrack.Business.Services;
 /// deposit is open, principal and interest back in once it has matured. Both
 /// halves are computed here rather than written as rows, so nothing has to run
 /// on a maturity date and deleting a deposit undoes both.
+///
+/// <b>A debt's payments are a flow; its transfers are a deposit.</b> That split
+/// looks arbitrary and is not. The monthly payment behaves exactly like rent —
+/// months up to today take it from the ledger, later months project it — which
+/// is the only way it can avoid double-counting a mortgage payment the user
+/// already logged. The one-off transfers around it (the downpayment, the
+/// disbursement, a lump off the principal) behave exactly like a deposit
+/// opening: derived on their date, never logged. The balance owed is neither.
+/// It is amortised from the terms, unconditionally, because what you owe the
+/// bank does not depend on whether you remembered to write the payment down.
 /// </remarks>
 public class FinanceProjector : IFinanceProjector
 {
@@ -55,12 +65,24 @@ public class FinanceProjector : IFinanceProjector
 
         List<PositionDto> positions = BuildPositions(data);
         List<AccountDto> accounts = BuildAccounts(data, today, positions);
+        List<ScheduledDebt> schedules = BuildSchedules(data);
+        List<DebtDto> debts = BuildDebts(schedules, today, data);
 
         // Summed from the account cards rather than from the ledger directly,
         // so the tile and the cards under it can never disagree by a cent.
         decimal cash = accounts.Sum(a => a.BalanceBase);
         decimal deposits = StillHeld(data.Deposits, today).Sum(d => ToBase(ValueAt(d, today), d.Currency, data));
         decimal stocks = positions.Sum(p => p.MarketValueBase ?? 0m);
+
+        // Through the same two helpers the projection uses, not summed off the
+        // cards. Summing the cards was wrong in a way that only showed up ten
+        // months before a purchase: DebtDto.AssetValueBase is what the thing is
+        // worth, which a debt carries from the day it is entered, while owning
+        // it starts on StartsOn. Adding those up counted a flat that had not
+        // been bought yet and put 220k on net worth that the chart, filtering
+        // properly, did not have. One code path now, so they cannot disagree.
+        decimal assets = AssetsOn(schedules, today, data);
+        decimal owed = OwedOn(schedules, today, data);
 
         return new FinanceOverviewDto
         {
@@ -69,14 +91,21 @@ public class FinanceProjector : IFinanceProjector
             CashBase = Round(cash),
             DepositsBase = Round(deposits),
             StocksBase = Round(stocks),
+            AssetsBase = Round(assets),
+            DebtsBase = Round(owed),
 
             // Summed from the rounded parts, not rounded from the raw sum.
-            // Otherwise the total is a cent off what the three numbers beside it
-            // add up to, and a total that visibly does not add up is a total
-            // nobody trusts.
-            NetWorthBase = Round(cash) + Round(deposits) + Round(stocks),
+            // Otherwise the total is a cent off what the numbers beside it add
+            // up to, and a total that visibly does not add up is a total nobody
+            // trusts.
+            NetWorthBase = Round(cash) + Round(deposits) + Round(stocks) + Round(assets) - Round(owed),
             MonthlyIncomeBase = Round(MonthlyRate(data, FinanceFlowKind.Income)),
-            MonthlyExpenseBase = Round(MonthlyRate(data, FinanceFlowKind.Expense)),
+
+            // The debt payments belong in here whether or not anyone also wrote
+            // them down as a flow. "A typical month" that leaves out the
+            // mortgage is the one number on the page that could talk somebody
+            // into a second one.
+            MonthlyExpenseBase = Round(MonthlyRate(data, FinanceFlowKind.Expense) + MonthlyDebtPayments(debts)),
 
             // A holding with no price contributes nothing, which would quietly
             // understate the total. The UI says so rather than showing a number
@@ -87,6 +116,7 @@ public class FinanceProjector : IFinanceProjector
             Flows = data.Flows,
             Positions = positions,
             Deposits = data.Deposits,
+            Debts = debts,
             Dividends = data.Dividends,
             Targets = data.Targets,
             Currencies = data.Currencies
@@ -134,6 +164,7 @@ public class FinanceProjector : IFinanceProjector
         // already reflects everything paid so far this month, which is exactly
         // why the loop below starts applying flows at the *next* month.
         List<PositionDto> positions = BuildPositions(data);
+        List<ScheduledDebt> schedules = BuildSchedules(data);
 
         decimal cash = BuildAccounts(data, today, positions).Sum(a => a.BalanceBase);
         decimal stocksNow = positions.Sum(p => p.MarketValueBase ?? 0m);
@@ -141,6 +172,8 @@ public class FinanceProjector : IFinanceProjector
         decimal monthToDateIncome = actuals.Where(a => a.Month == thisMonth).Sum(a => ToBase(a.Income, a.Currency, data));
         decimal monthToDateExpenses = actuals.Where(a => a.Month == thisMonth).Sum(a => ToBase(a.Expenses, a.Currency, data));
         decimal depositsNow = StillHeld(data.Deposits, today).Sum(d => ToBase(ValueAt(d, today), d.Currency, data));
+        decimal assetsNow = AssetsOn(schedules, today, data);
+        decimal owedNow = OwedOn(schedules, today, data);
 
         points.Add(new ProjectionPointDto
         {
@@ -152,7 +185,9 @@ public class FinanceProjector : IFinanceProjector
             Cash = Round(cash),
             Deposits = Round(depositsNow),
             Stocks = Round(stocksNow),
-            NetWorth = Round(cash) + Round(depositsNow) + Round(stocksNow)
+            Assets = Round(assetsNow),
+            Debts = Round(owedNow),
+            NetWorth = Round(cash) + Round(depositsNow) + Round(stocksNow) + Round(assetsNow) - Round(owedNow)
         });
 
         // ── Ahead of today: the flow definitions ──────────────────────────────
@@ -200,6 +235,20 @@ public class FinanceProjector : IFinanceProjector
                 }
             }
 
+            // A debt payment is an expense like the rent it usually replaces,
+            // and it stops of its own accord — the schedule simply runs out the
+            // month the balance clears. That is what makes "my payments end in
+            // 2047" a thing the chart can show rather than a date to remember.
+            foreach (ScheduledDebt scheduled in schedules)
+            {
+                DebtMonth? due = scheduled.Schedule.FirstOrDefault(m => m.Month == month);
+
+                if (due is not null)
+                {
+                    expenses += ToBase(due.Payment, scheduled.Debt.Currency, data);
+                }
+            }
+
             // The first bucket reaches back to the day after today rather than
             // to its own first, because the anchor above only counts deposits
             // that have already opened or matured. Without the overlap, one
@@ -223,7 +272,27 @@ public class FinanceProjector : IFinanceProjector
                 .Where(d => d.SourceAccountId.HasValue && d.OpenedOn >= windowFrom && d.OpenedOn <= monthEnd)
                 .Sum(d => ToBase(d.Principal, d.Currency, data));
 
-            runningCash += income - expenses + maturing - locking;
+            // The one-off transfers around a debt, on the same footing as a
+            // deposit opening and inside the same window. The borrowing lands
+            // only when an account is named — for a mortgage the bank pays the
+            // seller and the money never passes through here, which is why the
+            // downpayment can leave without anything arriving.
+            decimal borrowed = data.Debts
+                .Where(d => d.DisbursesToAccountId.HasValue && d.StartsOn >= windowFrom && d.StartsOn <= monthEnd)
+                .Sum(d => ToBase(d.Principal, d.Currency, data));
+
+            decimal down = data.Debts
+                .Where(d => d.DownPaymentAccountId.HasValue && d.StartsOn >= windowFrom && d.StartsOn <= monthEnd)
+                .Sum(d => ToBase(d.DownPayment ?? 0m, d.Currency, data));
+
+            // A planned lump off the principal is cash leaving on the day it is
+            // dated. Its effect on the balance is already in the schedule; this
+            // is only the other half of it.
+            decimal lumps = data.DebtPayments
+                .Where(p => p.AccountId.HasValue && p.PaidOn >= windowFrom && p.PaidOn <= monthEnd)
+                .Sum(p => ToBase(p.Amount, DebtCurrency(p, data), data));
+
+            runningCash += income - expenses + maturing - locking + borrowed - down - lumps;
 
             decimal deposits = StillHeld(data.Deposits, monthEnd)
                 .Sum(d => ToBase(ValueAt(d, monthEnd), d.Currency, data));
@@ -232,6 +301,12 @@ public class FinanceProjector : IFinanceProjector
             // than per holding, because the assumption is one number the user
             // typed — pretending it is per-stock would be false precision.
             decimal stocks = stocksNow * (decimal)Math.Pow(1 + (double)stockGrowthPct / 100.0, i / 12.0);
+
+            // Property is held flat for the same reason, in reverse: nobody
+            // typed an assumption for it, so inventing one would be the false
+            // precision. It appears whole the month its debt starts.
+            decimal assets = AssetsOn(schedules, monthEnd, data);
+            decimal owed = OwedOn(schedules, monthEnd, data);
 
             points.Add(new ProjectionPointDto
             {
@@ -243,7 +318,9 @@ public class FinanceProjector : IFinanceProjector
                 Cash = Round(runningCash),
                 Deposits = Round(deposits),
                 Stocks = Round(stocks),
-                NetWorth = Round(runningCash) + Round(deposits) + Round(stocks)
+                Assets = Round(assets),
+                Debts = Round(owed),
+                NetWorth = Round(runningCash) + Round(deposits) + Round(stocks) + Round(assets) - Round(owed)
             });
         }
 
@@ -254,9 +331,9 @@ public class FinanceProjector : IFinanceProjector
 
     /// <summary>
     /// Every account with what is sitting in it. Nothing here is read from a
-    /// column: the balance is the account's entries plus what its deposits have
-    /// moved, which is why "set the balance to 4,180" is an adjustment entry
-    /// and not an UPDATE.
+    /// column: the balance is the account's entries plus what its deposits and
+    /// debts have moved, which is why "set the balance to 4,180" is an
+    /// adjustment entry and not an UPDATE.
     /// </summary>
     private List<AccountDto> BuildAccounts(FinanceData data, DateOnly today, List<PositionDto> positions)
     {
@@ -267,7 +344,8 @@ public class FinanceProjector : IFinanceProjector
             decimal balance = data.Cash
                                   .Where(c => c.AccountId == account.Id)
                                   .Sum(c => ToBase(c.Amount, c.Currency, data))
-                              + DepositMovement(account.Id, today, data);
+                              + DepositMovement(account.Id, today, data)
+                              + DebtMovement(account.Id, today, data);
 
             decimal holdings = positions
                 .Where(p => p.AccountId == account.Id)
@@ -410,6 +488,259 @@ public class FinanceProjector : IFinanceProjector
         return deposit.Principal * (decimal)factor;
     }
 
+    // ── Debts ────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// 50 years. A payment that does not cover the month's interest never
+    /// amortises, and without a stop the loop below would run until the decimal
+    /// overflowed. The validator refuses that shape on the way in; this is what
+    /// stops a row that predates the validator, or one edited around it, from
+    /// taking the whole overview down with it.
+    /// </summary>
+    private const int ScheduleCapMonths = 600;
+
+    /// <summary>One month of a debt's life, in the debt's own currency.</summary>
+    /// <param name="Payment">
+    /// What is actually taken this month, which is the contractual payment
+    /// every month but the last — that one is a stub for whatever is left.
+    /// </param>
+    /// <param name="Closing">Owed at the end of the month. Zero on the payoff month.</param>
+    private sealed record DebtMonth(DateOnly Month, decimal Interest, decimal Payment, decimal Closing);
+
+    /// <summary>A debt with its schedule already run, so nothing amortises twice.</summary>
+    private sealed record ScheduledDebt(Debt Debt, List<DebtMonth> Schedule, List<DebtPayment> Payments);
+
+    private static List<ScheduledDebt> BuildSchedules(FinanceData data) =>
+        data.Debts
+            .Select(debt =>
+            {
+                List<DebtPayment> lumps = data.DebtPayments
+                    .Where(p => p.DebtId == debt.Id)
+                    .OrderBy(p => p.PaidOn)
+                    .ToList();
+
+                return new ScheduledDebt(debt, Amortise(debt, lumps), lumps);
+            })
+            .ToList();
+
+    /// <summary>
+    /// The whole life of a debt, month by month. The one piece of arithmetic in
+    /// this scope that runs forward rather than being evaluated at a date,
+    /// because each month's interest depends on what the month before left
+    /// behind — there is no closed form once a lump sum lands in the middle of
+    /// it.
+    ///
+    /// Within a month: interest accrues on the opening balance, the payment
+    /// covers that and takes the remainder off the principal, then any lump
+    /// sums dated in the month come off what is left. Paying the chunk last is
+    /// the conservative order — it charges a full month's interest on money that
+    /// might have gone on the 2nd — and it keeps a chunk from ever making a
+    /// month's interest negative.
+    ///
+    /// A zero rate is not a special case: the interest term falls out and every
+    /// payment goes entirely on the principal, which is exactly what an
+    /// interest-free instalment plan does.
+    /// </summary>
+    private static List<DebtMonth> Amortise(Debt debt, List<DebtPayment> lumps)
+    {
+        var schedule = new List<DebtMonth>();
+        var first = new DateOnly(debt.StartsOn.Year, debt.StartsOn.Month, 1);
+        DateOnly? lastAllowed = debt.EndsOn.HasValue
+            ? new DateOnly(debt.EndsOn.Value.Year, debt.EndsOn.Value.Month, 1)
+            : null;
+
+        decimal balance = debt.Principal;
+        decimal monthlyRate = debt.AnnualRate / 100m / 12m;
+
+        for (int i = 0; i < ScheduleCapMonths && balance > 0m; i++)
+        {
+            DateOnly month = first.AddMonths(i);
+
+            // ends_on caps the schedule whether or not the balance has cleared.
+            // Whatever is standing when it does is the balloon — a lease
+            // residual, the lump at the end of an interest-only deal — and it
+            // is reported rather than silently paid or silently paid forever.
+            if (lastAllowed.HasValue && month > lastAllowed.Value)
+            {
+                break;
+            }
+
+            decimal interest = Round(balance * monthlyRate);
+
+            // The last payment is a stub. Taking the full amount would overpay
+            // the bank by up to a payment and leave the balance negative, which
+            // then reads as an asset.
+            decimal payment = Math.Min(debt.Payment, balance + interest);
+
+            balance = balance + interest - payment;
+
+            decimal lump = lumps
+                .Where(p => p.PaidOn.Year == month.Year && p.PaidOn.Month == month.Month)
+                .Sum(p => p.Amount);
+
+            // Overpaying the balance to death clears it; it does not go
+            // negative and turn into money the bank owes you.
+            balance = Math.Max(0m, balance - lump);
+
+            schedule.Add(new DebtMonth(month, interest, payment, Round(balance)));
+        }
+
+        return schedule;
+    }
+
+    /// <summary>
+    /// What is still owed on a date, in the debt's own currency. Nothing before
+    /// the debt starts — a mortgage you sign next year is not money you owe
+    /// today — and the closing balance of the month it falls in after that.
+    ///
+    /// Monthly granularity, deliberately: the projection buckets by month, and a
+    /// balance accurate to the day inside a chart accurate to the month would be
+    /// precision with nowhere to go.
+    /// </summary>
+    private static decimal OwedOn(ScheduledDebt scheduled, DateOnly on)
+    {
+        var month = new DateOnly(on.Year, on.Month, 1);
+
+        if (scheduled.Schedule.Count == 0 || month < scheduled.Schedule[0].Month)
+        {
+            return 0m;
+        }
+
+        DebtMonth? current = scheduled.Schedule.LastOrDefault(m => m.Month <= month);
+
+        return current?.Closing ?? 0m;
+    }
+
+    private static decimal OwedOn(List<ScheduledDebt> schedules, DateOnly on, FinanceData data) =>
+        schedules.Sum(s => ToBase(OwedOn(s, on), s.Debt.Currency, data));
+
+    /// <summary>
+    /// What the debts have bought by a date, held flat. A debt that has not
+    /// started has not bought anything yet, which is what keeps the asset and
+    /// the borrowing appearing in the same month instead of the flat arriving
+    /// early and inflating net worth in between.
+    ///
+    /// The asset outlives the debt on purpose: the flat is still yours after the
+    /// mortgage is paid off.
+    /// </summary>
+    private static decimal AssetsOn(List<ScheduledDebt> schedules, DateOnly on, FinanceData data) =>
+        schedules
+            .Where(s => s.Debt.AssetValue.HasValue && s.Debt.StartsOn <= on)
+            .Sum(s => ToBase(s.Debt.AssetValue!.Value, s.Debt.Currency, data));
+
+    /// <summary>
+    /// What the debts have done to one account's balance by a given date. The
+    /// mirror of <see cref="DepositMovement"/>, and it plays by the same rule:
+    /// only the halves that name an account move anything, so a debt taken out
+    /// before it was tracked here — whose cash moved years ago and is already
+    /// inside the balance — moves nothing and cannot take it out twice.
+    ///
+    /// The monthly payments are deliberately not here. They are projected as
+    /// expenses instead, because a payment already logged in the ledger would
+    /// otherwise come out of the balance a second time.
+    /// </summary>
+    private static decimal DebtMovement(Guid accountId, DateOnly on, FinanceData data)
+    {
+        decimal borrowed = data.Debts
+            .Where(d => d.DisbursesToAccountId == accountId && d.StartsOn <= on)
+            .Sum(d => ToBase(d.Principal, d.Currency, data));
+
+        decimal down = data.Debts
+            .Where(d => d.DownPaymentAccountId == accountId && d.StartsOn <= on)
+            .Sum(d => ToBase(d.DownPayment ?? 0m, d.Currency, data));
+
+        decimal lumps = data.DebtPayments
+            .Where(p => p.AccountId == accountId && p.PaidOn <= on)
+            .Sum(p => ToBase(p.Amount, DebtCurrency(p, data), data));
+
+        return borrowed - down - lumps;
+    }
+
+    /// <summary>
+    /// A lump sum has no currency of its own — it is paid in whatever the debt
+    /// is denominated in, and giving it a second column would only let the two
+    /// disagree.
+    /// </summary>
+    private static string DebtCurrency(DebtPayment payment, FinanceData data) =>
+        data.Debts.FirstOrDefault(d => d.Id == payment.DebtId)?.Currency ?? "";
+
+    /// <summary>
+    /// The debts with their schedules read off. Everything derived is computed
+    /// once here rather than per card, which is what keeps the tile, the list
+    /// and the chart quoting the same figure.
+    /// </summary>
+    private static List<DebtDto> BuildDebts(List<ScheduledDebt> schedules, DateOnly today, FinanceData data)
+    {
+        var thisMonth = new DateOnly(today.Year, today.Month, 1);
+        var debts = new List<DebtDto>();
+
+        foreach (ScheduledDebt scheduled in schedules)
+        {
+            Debt debt = scheduled.Debt;
+            List<DebtMonth> schedule = scheduled.Schedule;
+
+            decimal outstanding = OwedOn(scheduled, today);
+
+            // The first month it reads zero. Null when it never does, which is
+            // a payment that does not cover the interest — the card says so
+            // rather than showing a date 50 years out that only means "capped".
+            DateOnly? paidOff = schedule.FirstOrDefault(m => m.Closing == 0m)?.Month;
+
+            // Only a balance still standing on the contractual last month is a
+            // balloon. One left by the 50-year cap is a debt that never clears,
+            // and calling that a balloon would dress up a broken row as a
+            // feature of the deal.
+            DebtMonth? last = schedule.Count == 0 ? null : schedule[^1];
+
+            decimal balloon = last is not null
+                              && last.Closing > 0m
+                              && debt.EndsOn.HasValue
+                              && last.Month == new DateOnly(debt.EndsOn.Value.Year, debt.EndsOn.Value.Month, 1)
+                ? last.Closing
+                : 0m;
+
+            decimal interestAhead = schedule.Where(m => m.Month > thisMonth).Sum(m => m.Interest);
+
+            debts.Add(new DebtDto
+            {
+                Id = debt.Id,
+                Name = debt.Name,
+                Principal = debt.Principal,
+                Currency = debt.Currency,
+                AnnualRate = debt.AnnualRate,
+                Payment = debt.Payment,
+                StartsOn = debt.StartsOn,
+                EndsOn = debt.EndsOn,
+                AssetValue = debt.AssetValue,
+                DownPayment = debt.DownPayment,
+                DownPaymentAccountId = debt.DownPaymentAccountId,
+                DisbursesToAccountId = debt.DisbursesToAccountId,
+                Note = debt.Note,
+
+                Outstanding = Round(outstanding),
+                OutstandingBase = Round(ToBase(outstanding, debt.Currency, data)),
+                AssetValueBase = debt.AssetValue.HasValue
+                    ? Round(ToBase(debt.AssetValue.Value, debt.Currency, data))
+                    : null,
+                PaymentBase = Round(ToBase(debt.Payment, debt.Currency, data)),
+                PaidOffOn = paidOff,
+                BalloonBase = Round(ToBase(balloon, debt.Currency, data)),
+                InterestRemainingBase = Round(ToBase(interestAhead, debt.Currency, data)),
+                Payments = scheduled.Payments.OrderByDescending(p => p.PaidOn).ToList()
+            });
+        }
+
+        return debts;
+    }
+
+    /// <summary>
+    /// What the debts add to a typical month. Only the ones still being paid:
+    /// a cleared debt costs nothing, and one that starts next year is not part
+    /// of this month either.
+    /// </summary>
+    private static decimal MonthlyDebtPayments(List<DebtDto> debts) =>
+        debts.Where(d => d.OutstandingBase > 0m).Sum(d => d.PaymentBase);
+
     // ── Cadence ──────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -547,6 +878,8 @@ public class FinanceProjector : IFinanceProjector
         Trades = await _repository.GetTradesAsync(unitOfWork),
         Dividends = await _repository.GetDividendsAsync(true, unitOfWork),
         Deposits = await _repository.GetDepositsAsync(unitOfWork),
+        Debts = await _repository.GetDebtsAsync(unitOfWork),
+        DebtPayments = await _repository.GetDebtPaymentsAsync(unitOfWork),
         Targets = await _repository.GetTargetsAsync(unitOfWork)
     };
 
@@ -560,6 +893,8 @@ public class FinanceProjector : IFinanceProjector
         public List<Trade> Trades { get; init; } = new();
         public List<Dividend> Dividends { get; init; } = new();
         public List<Deposit> Deposits { get; init; } = new();
+        public List<Debt> Debts { get; init; } = new();
+        public List<DebtPayment> DebtPayments { get; init; } = new();
         public List<FinanceTarget> Targets { get; init; } = new();
     }
 }

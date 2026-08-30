@@ -35,6 +35,11 @@ public static class ExceptionCodes
     public const string FINANCE_TRADE_NOT_FOUND = "FINANCE_TRADE_NOT_FOUND";
     public const string FINANCE_DIVIDEND_NOT_FOUND = "FINANCE_DIVIDEND_NOT_FOUND";
     public const string FINANCE_DEPOSIT_NOT_FOUND = "FINANCE_DEPOSIT_NOT_FOUND";
+    public const string FINANCE_DEBT_NOT_FOUND = "FINANCE_DEBT_NOT_FOUND";
+    public const string FINANCE_DEBT_PAYMENT_NOT_FOUND = "FINANCE_DEBT_PAYMENT_NOT_FOUND";
+
+    /// <summary>Terms that cannot amortise — a payment below the interest, dates the wrong way round.</summary>
+    public const string FINANCE_DEBT_IMPOSSIBLE = "FINANCE_DEBT_IMPOSSIBLE";
     public const string FINANCE_TARGET_NOT_FOUND = "FINANCE_TARGET_NOT_FOUND";
     public const string FINANCE_CURRENCY_NOT_FOUND = "FINANCE_CURRENCY_NOT_FOUND";
     public const string FINANCE_SYMBOL_EXISTS = "FINANCE_SYMBOL_EXISTS";
